@@ -53,10 +53,28 @@ function releaseSocket(socket: Socket): void {
   broadcast(seated.room);
 }
 
+/** Save room data and surface persistence failures without exposing game state. */
+function persistRooms(room?: Room): boolean {
+  try {
+    saveRooms();
+    return true;
+  } catch (error) {
+    console.error('Failed to persist room data.', error);
+    const message = 'Room changes could not be saved and may be lost if the server stops.';
+    if (room) {
+      for (const seat of room.seats) {
+        if (seat.socketId) io.to(seat.socketId).emit('error:message', message);
+      }
+    } else {
+      io.emit('error:message', message);
+    }
+    return false;
+  }
+}
+
 /** Push everyone in a room their own view — each player sees only their own hand. */
-function broadcast(room: Room): void {
-  // Every change ends in a broadcast, so this is where the store hits the disk.
-  saveRooms();
+function broadcast(room: Room): boolean {
+  const persisted = persistRooms(room);
   for (const seat of room.seats) {
     if (!seat.socketId) continue;
     io.to(seat.socketId).emit('sync', {
@@ -65,16 +83,21 @@ function broadcast(room: Room): void {
       you: { id: seat.playerId, name: seat.name },
     });
   }
+  return persisted;
 }
 
-type Ack = (response: { ok: true; code: string; token: string; playerId: string } | { ok: false; error: string }) => void;
+type Ack = (
+  response:
+    | { ok: true; code: string; token: string; playerId: string; persisted: boolean }
+    | { ok: false; error: string },
+) => void;
 
 function seatSocket(socket: Socket, room: Room, seat: Seat, ack?: Ack): void {
   const previous = currentSeat(socket);
   if (previous && (previous.room !== room || previous.seat !== seat)) releaseSocket(socket);
   sockets.set(socket.id, { room, seat });
-  ack?.({ ok: true, code: room.code, token: seat.token, playerId: seat.playerId });
-  broadcast(room);
+  const persisted = broadcast(room);
+  ack?.({ ok: true, code: room.code, token: seat.token, playerId: seat.playerId, persisted });
 }
 
 io.on('connection', (socket) => {
@@ -162,7 +185,7 @@ if (process.env.NODE_ENV === 'production') {
 
 setInterval(() => {
   sweepStaleRooms();
-  saveRooms();
+  persistRooms();
 }, 15 * 60 * 1000).unref();
 
 /** Exported so tests can run the real server on an ephemeral port. */

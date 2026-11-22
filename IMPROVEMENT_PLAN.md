@@ -1,6 +1,6 @@
 # Project Improvement Plan
 
-**Status:** In progress — delivery 1 complete
+**Status:** In progress — deliveries 1–2 complete
 **Prepared:** 2026-11-22
 
 This plan prioritizes improvements to the current Catan Online implementation.
@@ -11,7 +11,7 @@ automation initiative is intentionally excluded.
 ## Recommended order
 
 1. Fix reconnect ownership (complete).
-2. Harden persistence.
+2. Harden persistence (complete).
 3. Prepare for public hosting.
 4. Improve accessibility and mobile usability.
 5. Refresh documentation.
@@ -72,6 +72,27 @@ passed. The build still reports its large 3D bundle warning.
 visible.
 
 **Relevant file:** `server/rooms.ts`.
+
+**Status:** Implemented on 2026-11-22.
+
+Only a missing save file is treated as an empty first run. Read errors, invalid
+JSON and structurally invalid room or game data now fail explicitly; the whole
+file is validated before replacing the in-memory store. Saves retain the
+temporary-file-and-rename strategy and report failures. Connected players are
+warned when a save fails, and room-entry acknowledgements include whether the
+update was persisted. The last good file remains intact if writing or renaming
+the replacement fails.
+
+The current saved game was loaded successfully with the new validator. A local
+measurement of 20 synchronous saves for 100 newly dealt two-player games
+(321,903-byte save file) averaged 1.98 ms per save. This supports retaining the
+single-file store for the current small, single-server setup; it is not a
+production capacity guarantee.
+
+README recovery guidance now covers `CATAN_DATA`, filesystem access,
+restricted backups, invalid-save startup behavior and restoring a backup.
+Validation: `npm test` passed all 79 tests and `npm run build` passed. The build
+still reports its large 3D bundle warning.
 
 ### Implementation
 
@@ -233,7 +254,7 @@ screens.
 | Delivery | Outcome | Status |
 | --- | --- | --- |
 | 1 | Exclusive socket ownership and reconnect fixes | Complete |
-| 2 | Safe loading, save failures and recovery | Pending |
+| 2 | Safe loading, save failures and recovery | Complete |
 | 3 | Token, payload and production-runtime hardening | Pending |
 | 4 | Hosting configuration after selecting a provider | Pending |
 | 5 | Keyboard, screen-reader and mobile improvements | Pending |

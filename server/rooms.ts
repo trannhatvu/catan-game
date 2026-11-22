@@ -2,8 +2,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { applyAction, createGame } from '../shared/rules';
 import { viewFor, type PlayerView } from '../shared/redact';
-import { MAPS, isMapId, type MapId } from '../shared/scenario';
-import type { Action, GameState, PlayerId } from '../shared/types';
+import { graphFor, MAPS, isMapId, type MapId } from '../shared/scenario';
+import {
+  RESOURCES,
+  type Action,
+  type BoardState,
+  type DevCardType,
+  type GameState,
+  type LogEntry,
+  type Phase,
+  type Player,
+  type PlayerId,
+  type PortType,
+  type ResourceCounts,
+  type Terrain,
+  type TradeOffer,
+} from '../shared/types';
 
 export const MAX_SEATS = 4;
 export const MIN_SEATS = 2;
@@ -41,33 +55,316 @@ const rooms = new Map<string, Room>();
 
 let dataFile: string | null = null;
 
+const TERRAIN_TYPES: readonly Terrain[] = ['hills', 'forest', 'pasture', 'fields', 'mountains', 'desert', 'sea', 'gold'];
+const DEV_CARD_TYPES: readonly DevCardType[] = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly', 'victoryPoint'];
+const PORT_TYPES: readonly PortType[] = [...RESOURCES, 'any'];
+const PHASES: readonly Phase[] = ['lobby', 'setup', 'rolling', 'discarding', 'movingRobber', 'stealing', 'main', 'finished'];
+
+type DataRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is DataRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<T extends string | number>(value: unknown, values: readonly T[]): value is T {
+  return values.some((candidate) => candidate === value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isResourceCounts(value: unknown): value is ResourceCounts {
+  return isRecord(value) && RESOURCES.every((resource) => isNonNegativeInteger(value[resource]));
+}
+
+function isPlayerRecord(value: unknown, playerIds: Set<string>, validate: (entry: unknown) => boolean): boolean {
+  return isRecord(value) && Object.entries(value).every(([id, entry]) => playerIds.has(id) && validate(entry));
+}
+
+function isDevCard(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isOneOf(value.type, DEV_CARD_TYPES) &&
+    isNonNegativeInteger(value.boughtOnTurn) &&
+    typeof value.played === 'boolean'
+  );
+}
+
+function isPlayer(value: unknown): value is Player {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string' &&
+    typeof value.color === 'string' &&
+    isNonNegativeInteger(value.seat) &&
+    typeof value.connected === 'boolean' &&
+    isResourceCounts(value.resources) &&
+    Array.isArray(value.devCards) &&
+    value.devCards.every(isDevCard) &&
+    isNonNegativeInteger(value.knightsPlayed) &&
+    isRecord(value.pieces) &&
+    isNonNegativeInteger(value.pieces.road) &&
+    isNonNegativeInteger(value.pieces.settlement) &&
+    isNonNegativeInteger(value.pieces.city)
+  );
+}
+
+function isPlayerArray(value: unknown): value is Player[] {
+  return Array.isArray(value) && value.every(isPlayer);
+}
+
+function isLogEntry(value: unknown, playerIds: Set<string>): value is LogEntry {
+  return (
+    isRecord(value) &&
+    isNonNegativeInteger(value.id) &&
+    isNonNegativeInteger(value.turn) &&
+    (value.player === null || (typeof value.player === 'string' && playerIds.has(value.player))) &&
+    typeof value.text === 'string'
+  );
+}
+
+function isTradeOffer(value: unknown, playerIds: Set<string>): value is TradeOffer {
+  return (
+    isRecord(value) &&
+    typeof value.from === 'string' &&
+    playerIds.has(value.from) &&
+    isResourceCounts(value.give) &&
+    isResourceCounts(value.want) &&
+    isPlayerRecord(value.responses, playerIds, (response) => isOneOf(response, ['pending', 'accept', 'reject']))
+  );
+}
+
+function isHexState(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isOneOf(value.terrain, TERRAIN_TYPES) &&
+    (value.token === null || (isNonNegativeInteger(value.token) && value.token >= 2 && value.token <= 12))
+  );
+}
+
+function isBoardState(value: unknown, playerIds: Set<string>): value is BoardState {
+  if (!isRecord(value) || !isMapId(value.map)) return false;
+
+  const graph = graphFor(value.map);
+  const hexIds = new Set(graph.hexes);
+  const vertexIds = new Set(Object.keys(graph.vertices));
+  const edgeIds = new Set(Object.keys(graph.edges));
+  const hexes = value.hexes;
+  const ports = value.ports;
+  const buildings = value.buildings;
+  const roads = value.roads;
+
+  return (
+    isRecord(hexes) &&
+    Object.keys(hexes).length === hexIds.size &&
+    graph.hexes.every((hex) => isHexState(hexes[hex])) &&
+    Array.isArray(ports) &&
+    ports.every(
+      (port) =>
+        isRecord(port) &&
+        isOneOf(port.type, PORT_TYPES) &&
+        typeof port.edge === 'string' &&
+        edgeIds.has(port.edge) &&
+        Array.isArray(port.vertices) &&
+        port.vertices.length === 2 &&
+        port.vertices.every((vertex) => typeof vertex === 'string' && vertexIds.has(vertex)),
+    ) &&
+    isRecord(buildings) &&
+    Object.entries(buildings).every(
+      ([vertex, building]) =>
+        vertexIds.has(vertex) &&
+        isRecord(building) &&
+        typeof building.owner === 'string' &&
+        playerIds.has(building.owner) &&
+        isOneOf(building.type, ['settlement', 'city']),
+    ) &&
+    isRecord(roads) &&
+    Object.entries(roads).every(
+      ([edge, road]) =>
+        edgeIds.has(edge) &&
+        isRecord(road) &&
+        typeof road.owner === 'string' &&
+        playerIds.has(road.owner),
+    ) &&
+    typeof value.robber === 'string' &&
+    hexIds.has(value.robber)
+  );
+}
+
+function isGameState(value: unknown): value is GameState {
+  if (!isRecord(value) || !isPlayerArray(value.players)) return false;
+
+  const players = value.players;
+  if (players.length < MIN_SEATS || players.length > MAX_SEATS) return false;
+  const playerIds = new Set(players.map((player) => player.id));
+  if (playerIds.size !== players.length || !isBoardState(value.board, playerIds)) return false;
+
+  const graph = graphFor(value.board.map);
+  const vertexIds = new Set(Object.keys(graph.vertices));
+  const diceValid =
+    value.dice === null ||
+    (Array.isArray(value.dice) &&
+      value.dice.length === 2 &&
+      value.dice.every((die) => isNonNegativeInteger(die) && die >= 1 && die <= 6));
+  const setupValid =
+    value.setup === null ||
+    (isRecord(value.setup) &&
+      isOneOf(value.setup.round, [1, 2]) &&
+      isOneOf(value.setup.placing, ['settlement', 'road']) &&
+      (value.setup.lastVertex === null ||
+        (typeof value.setup.lastVertex === 'string' && vertexIds.has(value.setup.lastVertex))));
+  const tradeValid = value.trade === null || isTradeOffer(value.trade, playerIds);
+
+  return (
+    isOneOf(value.phase, PHASES) &&
+    isNonNegativeInteger(value.current) &&
+    value.current < players.length &&
+    isNonNegativeInteger(value.turn) &&
+    diceValid &&
+    typeof value.mustRoll === 'boolean' &&
+    setupValid &&
+    isPlayerRecord(value.pendingDiscards, playerIds, isNonNegativeInteger) &&
+    Array.isArray(value.stealTargets) &&
+    value.stealTargets.every((id) => typeof id === 'string' && playerIds.has(id)) &&
+    isResourceCounts(value.bank) &&
+    Array.isArray(value.devDeck) &&
+    value.devDeck.every((card) => isOneOf(card, DEV_CARD_TYPES)) &&
+    isRecord(value.rng) &&
+    isNonNegativeInteger(value.rng.seed) &&
+    value.rng.seed <= 0xffffffff &&
+    isNonNegativeInteger(value.freeRoads) &&
+    typeof value.playedDevThisTurn === 'boolean' &&
+    tradeValid &&
+    isRecord(value.longestRoad) &&
+    (value.longestRoad.owner === null ||
+      (typeof value.longestRoad.owner === 'string' && playerIds.has(value.longestRoad.owner))) &&
+    isNonNegativeInteger(value.longestRoad.length) &&
+    isRecord(value.largestArmy) &&
+    (value.largestArmy.owner === null ||
+      (typeof value.largestArmy.owner === 'string' && playerIds.has(value.largestArmy.owner))) &&
+    isNonNegativeInteger(value.largestArmy.size) &&
+    (value.winner === null || (typeof value.winner === 'string' && playerIds.has(value.winner))) &&
+    Array.isArray(value.log) &&
+    value.log.every((entry) => isLogEntry(entry, playerIds)) &&
+    isNonNegativeInteger(value.nextLogId)
+  );
+}
+
+function isSeat(value: unknown): value is Seat {
+  return (
+    isRecord(value) &&
+    typeof value.playerId === 'string' &&
+    value.playerId.length > 0 &&
+    typeof value.token === 'string' &&
+    value.token.length > 0 &&
+    typeof value.name === 'string' &&
+    value.name.length > 0 &&
+    value.name.length <= 16 &&
+    (value.socketId === null || (typeof value.socketId === 'string' && value.socketId.length > 0))
+  );
+}
+
+function isSeatArray(value: unknown): value is Seat[] {
+  return Array.isArray(value) && value.every(isSeat);
+}
+
+function isRoom(value: unknown): value is Room {
+  if (
+    !isRecord(value) ||
+    typeof value.code !== 'string' ||
+    !/^[A-HJ-NP-Z2-9]{4}$/.test(value.code) ||
+    !isSeatArray(value.seats) ||
+    value.seats.length === 0 ||
+    value.seats.length > MAX_SEATS ||
+    typeof value.hostId !== 'string' ||
+    !isMapId(value.map) ||
+    !isNonNegativeInteger(value.updatedAt)
+  ) {
+    return false;
+  }
+
+  const seatIds = new Set(value.seats.map((seat) => seat.playerId));
+  const tokens = new Set(value.seats.map((seat) => seat.token));
+  if (seatIds.size !== value.seats.length || tokens.size !== value.seats.length || !seatIds.has(value.hostId)) return false;
+  if (value.state === null) return true;
+  if (!isGameState(value.state)) return false;
+
+  const statePlayerIds = new Set(value.state.players.map((player) => player.id));
+  return (
+    value.state.board.map === value.map &&
+    statePlayerIds.size === value.seats.length &&
+    value.seats.every((seat) => statePlayerIds.has(seat.playerId))
+  );
+}
+
+function isRoomArray(value: unknown): value is Room[] {
+  if (!Array.isArray(value)) return false;
+  const roomCodes = new Set<string>();
+  const tokens = new Set<string>();
+  for (const candidate of value) {
+    if (!isRoom(candidate) || roomCodes.has(candidate.code)) return false;
+    roomCodes.add(candidate.code);
+    for (const seat of candidate.seats) {
+      if (tokens.has(seat.token)) return false;
+      tokens.add(seat.token);
+    }
+  }
+  return true;
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return isRecord(error) && error.code === code;
+}
+
 /**
  * Load rooms from disk and write them back after every change, so a server
  * restart no longer ends games. Only the real server turns this on; tests keep
  * the store in memory.
  */
 export function enablePersistence(file: string): void {
-  dataFile = file;
+  let contents: string;
   try {
-    const saved = JSON.parse(fs.readFileSync(file, 'utf8')) as Room[];
-    for (const room of saved) {
-      // Nobody is connected to a server that has just started.
-      for (const seat of room.seats) seat.socketId = null;
-      for (const p of room.state?.players ?? []) p.connected = false;
-      rooms.set(room.code, room);
+    contents = fs.readFileSync(file, 'utf8');
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) {
+      rooms.clear();
+      dataFile = file;
+      return;
     }
-  } catch {
-    // No file yet, or unreadable: start empty.
+    throw new Error(`Failed to read room data from ${file}`, { cause: error });
   }
+
+  let saved: unknown;
+  try {
+    saved = JSON.parse(contents);
+  } catch (error) {
+    throw new Error(`Room data at ${file} is not valid JSON`, { cause: error });
+  }
+  if (!isRoomArray(saved)) throw new Error(`Room data at ${file} has an invalid structure`);
+
+  rooms.clear();
+  for (const room of saved) {
+    // Nobody is connected to a server that has just started.
+    for (const seat of room.seats) seat.socketId = null;
+    for (const player of room.state?.players ?? []) player.connected = false;
+    rooms.set(room.code, room);
+  }
+  dataFile = file;
 }
 
 /** ponytail: rewrites the whole store on every change; fine for a few dozen rooms, per-room files if it grows. */
 export function saveRooms(): void {
   if (!dataFile) return;
-  fs.mkdirSync(path.dirname(dataFile), { recursive: true });
-  const tmp = `${dataFile}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify([...rooms.values()]));
-  fs.renameSync(tmp, dataFile);
+  try {
+    fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    const tmp = `${dataFile}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify([...rooms.values()]));
+    fs.renameSync(tmp, dataFile);
+  } catch (error) {
+    throw new Error(`Failed to save room data to ${dataFile}`, { cause: error });
+  }
 }
 
 // Unambiguous alphabet: no O/0, no I/1.
@@ -285,4 +582,5 @@ export function roomsSnapshot(): RoomSummary[] {
 /** Test seam: drop every room so one test file cannot leak into the next. */
 export function resetRooms(): void {
   rooms.clear();
+  dataFile = null;
 }

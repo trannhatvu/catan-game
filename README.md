@@ -144,6 +144,14 @@ disconnects.
 - Rooms are written to `data/rooms.json` (or `$CATAN_DATA`) after every change
   and loaded on start, so restarting the server no longer ends games: clients
   reconnect and rejoin by token.
+- `CATAN_DATA` can point to another room-save file; its parent directory must be
+  writable by the server. Back up the configured file and restrict access:
+  saves include hidden game state and reconnect tokens. A missing file starts
+  with no saved rooms, while corrupt or unreadable data prevents startup rather
+  than silently discarding games. If a save fails, the server logs the failure
+  and warns connected players; the game continues in memory, but changes since
+  the last successful save may be lost on restart. To restore a backup, stop
+  the server, replace the configured save file, then start it again.
 - `HexType` already includes `sea` and `gold`, the board comes from a `Scenario`
   object, and the development deck is a data table — the three hooks an
   expansion would need. Nothing else is generalised until one is actually built.
