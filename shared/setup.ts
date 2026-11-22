@@ -20,17 +20,46 @@ function dealTerrainAndTokens(rng: Rng, scenario: Scenario): Record<HexId, HexSt
   for (let attempt = 0; attempt < 1000; attempt++) {
     const deal = scenario.fixed ? <T>(_: Rng, xs: T[]) => [...xs] : shuffle;
     const terrains = deal(rng, scenario.terrains);
-    const tokens = deal(rng, scenario.tokens);
     const hexes: Record<HexId, HexState> = {};
-    let t = 0;
     graphFor(scenario.id).hexes.forEach((h, i) => {
-      const terrain = terrains[i];
-      const producing = terrain !== 'desert' && terrain !== 'sea';
-      hexes[h] = { terrain, token: producing ? tokens[t++] : null };
+      hexes[h] = { terrain: terrains[i], token: null };
     });
+    const tokens =
+      scenario.fixed || scenario.id === 'classic' ? [...scenario.tokens] : shuffle(rng, scenario.tokens);
+    const tokenOrder =
+      scenario.id === 'classic' && !scenario.fixed
+        ? counterclockwiseHexOrder(graphFor(scenario.id).hexes)
+        : graphFor(scenario.id).hexes;
+    let t = 0;
+    for (const h of tokenOrder) {
+      if (hexes[h].terrain !== 'desert' && hexes[h].terrain !== 'sea') hexes[h].token = tokens[t++];
+    }
     if (redTokensSeparated(hexes)) return hexes;
   }
   throw new Error('could not lay out number tokens without adjacent red tokens');
+}
+
+function counterclockwiseHexOrder(hexes: readonly HexId[]): HexId[] {
+  const coords = hexes.map((id) => ({ id, coord: parseHexId(id) }));
+  const radius = Math.max(...coords.map(({ coord }) => hexDistance(coord, { q: 0, r: 0 })));
+  const order: HexId[] = [];
+
+  for (let distance = radius; distance > 0; distance--) {
+    const ring = coords
+      .filter(({ coord }) => hexDistance(coord, { q: 0, r: 0 }) === distance)
+      .sort((a, b) => {
+        const angle = ({ q, r }: { q: number; r: number }) =>
+          Math.atan2(1.5 * r, Math.sqrt(3) * (q + r / 2));
+        return angle(b.coord) - angle(a.coord);
+      });
+    const start = ring.findIndex(({ coord }) => coord.q === 0 && coord.r === -distance);
+    if (start > 0) order.push(...ring.slice(start).map(({ id }) => id), ...ring.slice(0, start).map(({ id }) => id));
+    else order.push(...ring.map(({ id }) => id));
+  }
+
+  const center = coords.find(({ coord }) => coord.q === 0 && coord.r === 0);
+  if (center) order.push(center.id);
+  return order;
 }
 
 function redTokensSeparated(hexes: Record<HexId, HexState>): boolean {

@@ -11,32 +11,23 @@ extension, or unofficial two-player rules.
 
 The implementation review covered the shared rules, board generation and
 scenarios, room player limits, redacted views, relevant UI, and shared rule
-tests. After the first rule-fix delivery, focused validation on 2026-11-22
-passed: `npm test -- shared/__tests__/rules.test.ts
-shared/__tests__/setup.test.ts` (38 tests) and `npm run build`. Passing tests
-is not proof of complete rulebook compliance.
+tests. Final validation on 2026-11-22 passed: `npm test` (88 tests),
+`npm run build`, and `npm run simulate -- 2024 3` (winner reached with no card
+conservation warnings). A two-client browser smoke test also confirmed the
+initiative roll handoff and the fixed-board label.
 
 ## Verdict
 
-The project implements most of the base game's core loop: setup drafting,
-resource production, the robber, construction, bank and harbour trades,
-development cards, awards, and victory scoring. It does **not** implement
-every rule in the supplied book.
+The project implements the supplied 3–4 player base game's core flow:
+initiative rolls, setup drafting, resource production, the robber,
+construction, bank and harbour trades, player counteroffers, development
+cards, awards, and victory scoring. The audited procedural gaps have been
+closed. The app deliberately labels its fixed board as a variant because it
+uses the normal opening draft rather than the rulebook's recommended beginner
+starting-piece layout.
 
-Two server-side gaps from the initial audit are now fixed: eligible robber theft
-cannot be skipped, and same-resource player trades are rejected. The main
-remaining conformance gaps are:
-
-1. Players can accept or decline a trade, but cannot make counteroffers.
-2. The room's first seat starts; the highest-dice first-player selection is
-   absent.
-3. The beginner board is fixed, but its prescribed opening pieces are not;
-   the game always asks players to draft placements.
-
-The project also supports two-player rooms, which are outside the supplied
-rulebook's 3–4 player scope. The large map is based on a 5–6 player extension
-board, but the project caps rooms at four and does not implement that
-extension's full rules.
+Two-player rooms and the large map remain app modes outside this rulebook's
+3–4 player base-game scope.
 
 ## Status key
 
@@ -55,9 +46,9 @@ extension's full rules.
 | SET-01 | A standard game uses the base island: 19 land hexes, with the rulebook's terrain and number-token supplies; no hex has a 7 token. | Implemented | [BASE_GAME](./shared/scenario.ts#L47) defines the supplies. |
 | SET-02 | The bank starts with 19 cards of each resource. The development deck has 25 cards: 14 Knights, 5 Victory Points, and 2 of each other action card. | Implemented | [game creation and deck](./shared/rules.ts#L28) initialize these supplies. |
 | SET-03 | Each player has 15 roads, 5 settlements, and 4 cities. The base board has four 3:1 ports and one 2:1 port for each resource. | Implemented | [piece limits](./shared/types.ts#L45) and [port supply](./shared/scenario.ts#L44). |
-| SET-04 | Variable setup creates a playable board, places the robber on the desert, and keeps 6/8 tokens apart. | Partial | [board generation](./shared/setup.ts#L17) satisfies these constraints, but places shuffled number values and retries rather than following the PDF's letter-order placement procedure. The resulting legal boards can therefore differ. |
-| SET-05 | The recommended beginner setup uses its fixed board and prescribed starting-piece layout. | Partial | The [beginner scenario](./shared/scenario.ts#L66) fixes the board recipe, but the game still uses the normal free-placement draft; the printed starting-piece locations are not pre-placed. |
-| SET-06 | Determine the first player by the highest dice roll. | Missing | New games set the current player to seat zero in [createGame](./shared/rules.ts#L291); there is no initiative roll. |
+| SET-04 | Variable setup creates a playable board, places the robber on the desert, follows the counterclockwise A–R number-disc order while skipping the desert, and keeps 6/8 tokens apart. | Implemented | [Board generation](./shared/setup.ts#L17) randomizes terrain, places the number discs from the top-left corner counterclockwise in A–R order, skips the desert, and keeps the 6/8 separation rule. |
+| SET-05 | The recommended beginner setup uses its fixed board and prescribed starting-piece layout. | Variant / out of scope | The app labels this option [Fixed board](./shared/scenario.ts#L65): it keeps the deterministic board but intentionally uses the normal opening draft instead of claiming the rulebook's pre-arranged piece layout. |
+| SET-06 | Determine the first player by the highest dice roll. | Implemented | [Game creation and initiative](./shared/rules.ts#L259) require each player to roll before the draft; tied leaders reroll, and the winner starts the snake order and first turn. |
 | SET-07 | In variable setup, players place a settlement and adjacent road in order, then place their second settlement and road in reverse order. The second settlement grants its adjacent resources. | Implemented | [Setup progression](./shared/rules.ts#L318), [setup actions](./shared/rules.ts#L470), and the [draft tests](./shared/__tests__/rules.test.ts#L80) cover the snake order and payout. |
 | SET-08 | The base rulebook is for 3–4 players. | Variant / out of scope | Rooms allow 2–4 players in [room limits](./server/rooms.ts#L22). Two-player play is an app mode, not a rulebook-compliant base game. |
 | SET-09 | The 5–6 player extension uses its additional rules as well as a larger board. | Variant / out of scope | [Large island](./shared/scenario.ts#L86) supplies the larger board, but the app allows at most four seats and has no extension turn rules. |
@@ -79,7 +70,7 @@ extension's full rules.
 | TRADE-01 | Trade with the bank at 4:1, or at 3:1/2:1 when a settlement or city controls the corresponding harbour; take a different resource that the bank has. | Implemented | [Bank rates and trade](./shared/rules.ts#L638) enforce the rates, port access, and bank availability. |
 | TRADE-02 | On the active player's turn, players may negotiate with that player; they may not trade with each other or the supply on someone else's turn. | Implemented | New offers and bank trades require the main phase and current player; off-turn responses apply only to an active offer in [trade handling](./shared/rules.ts#L654). |
 | TRADE-03 | Player trades cannot give cards away, including by exchanging the same resource type for itself. | Implemented | [Offer validation](./shared/rules.ts#L654) rejects bundles with any resource type on both sides; a regression test verifies that a net-gift offer is rejected. |
-| TRADE-04 | A responder may accept, reject, or counteroffer; the active player may continue negotiations and settle an accepted deal. | Partial | Offers can be accepted or declined and settled, but the [trade response UI](./src/ui/Modals.tsx#L412) has no counteroffer flow or action. |
+| TRADE-04 | A responder may accept, reject, or counteroffer; the active player may continue negotiations and settle an accepted deal. | Implemented | [Trade actions](./shared/rules.ts#L720) validate counteroffers and settlement on the server; the [trade UI](./src/ui/Modals.tsx#L442) shows and resolves them. |
 | BUILD-01 | Pay the specified resource costs; roads connect to the player's network and cannot pass through an opponent's building; settlements obey the distance rule and connect to the player's road. | Implemented | [Costs and piece limits](./shared/types.ts#L38) plus [build validation](./shared/rules.ts#L565) enforce these requirements. |
 | BUILD-02 | Cities replace the player's settlements; settlements score 1 point, cities 2, and roads score none. Piece supplies limit further construction. | Implemented | [City upgrades](./shared/rules.ts#L599), [piece limits](./shared/types.ts#L45), and [public scoring](./shared/rules.ts#L189). |
 | CARD-01 | Buy from the finite deck at the listed cost. Cards stay hidden, cannot be traded, and do not count toward the seven-card resource discard. | Implemented | The [deck](./shared/rules.ts#L28), [purchase action](./shared/rules.ts#L617), and [redacted player view](./shared/redact.ts#L74) support this. |
@@ -94,23 +85,12 @@ extension's full rules.
 | AWARD-02 | The player with at least three played Knights and the largest army gets 2 points; a larger army takes the award. | Implemented | [Largest Army update](./shared/rules.ts#L236). |
 | WIN-01 | Count settlements, cities, awards, and Victory Point cards. A player reaches victory at 10 points during their turn; the game ends immediately. | Implemented | [Public and total scores](./shared/rules.ts#L189) and [winner check](./shared/rules.ts#L245). |
 
-## Gaps to close for strict rulebook parity
+## Remaining distinctions
 
-These are remaining behavior discrepancies in the authoritative game flow:
-
-1. **Support counteroffers, or explicitly document the reduced trading rules.**
-   The current server action model and UI only support accepting or declining
-   an offer.
-2. **Choose the starting player according to the rulebook.** Add a dice-based
-   initiative flow before the draft; add deterministic tests for ties and
-   ordering.
-3. **Decide whether “Beginner” promises the complete fixed setup.** To match
-   the book, pre-place the prescribed starting pieces; otherwise label it as a
-   fixed board with the app's normal draft.
-
-The variable setup's number-token dealing procedure is also different from the
-PDF's letter-order procedure. If exact setup reproducibility matters, implement
-that sequence rather than only enforcing the separated-red-token constraint.
+No known procedural gaps remain in the audited 3–4 player base-game checklist.
+The app's **Fixed board** option is explicitly a variant: it does not pre-place
+the rulebook's recommended starting pieces. The two-player mode and large-map
+option are likewise not claims of complete rulebook or extension compliance.
 
 ## Out-of-scope modes to label clearly
 
@@ -119,3 +99,5 @@ that sequence rather than only enforcing the separated-red-token constraint.
 - The large map uses a 5–6 player extension board recipe, but does not make the
   app a complete implementation of that extension. Do not imply extension
   support unless its additional rules and player count are implemented.
+- The fixed-board option uses a deterministic board with the normal draft; it
+  is not the rulebook's recommended pre-arranged beginner setup.

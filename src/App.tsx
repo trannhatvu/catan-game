@@ -58,6 +58,10 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
     if (view.trade === null) setShowTrade(false);
   }, [view.trade]);
 
+  useEffect(() => {
+    if (view.moves.mustAnswerCounter) setShowTrade(true);
+  }, [view.moves.mustAnswerCounter]);
+
   // Rejected actions surface as a short toast rather than a blocking dialog.
   useEffect(() => {
     if (!api.error) return;
@@ -93,9 +97,13 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
           <span className="turn-dot" style={{ ['--turn-color' as string]: current?.color ?? 'transparent' }} />
           {view.winner
             ? 'Game over'
-            : view.moves.isMyTurn
-              ? 'Your turn'
-              : `${current?.name ?? 'Someone'}’s turn`}
+            : view.phase === 'initiative'
+              ? view.moves.isMyTurn
+                ? 'Your roll'
+                : `${current?.name ?? 'Someone'} is rolling`
+              : view.moves.isMyTurn
+                ? 'Your turn'
+                : `${current?.name ?? 'Someone'}’s turn`}
         </div>
       </header>
 
@@ -129,6 +137,7 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
         view={view}
         pending={active}
         setPending={setPending}
+        onRollForStart={() => api.send({ type: 'rollForStart' })}
         onRoll={() => api.send({ type: 'rollDice' })}
         onEndTurn={() => api.send({ type: 'endTurn' })}
         onBuyDevCard={() => api.send({ type: 'buyDevCard' })}

@@ -6,6 +6,25 @@ import { BASE_GAME, BEGINNER, MAPS, RED_TOKENS, graphFor } from '../scenario';
 
 const boards = Array.from({ length: 300 }, (_, i) => generateBoard(makeRng(i + 1)));
 
+function letterOrderHexes(): string[] {
+  const coords = BOARD.hexes.map((id) => ({ id, coord: parseHexId(id) }));
+  const radius = Math.max(...coords.map(({ coord }) => hexDistance(coord, { q: 0, r: 0 })));
+  const order: string[] = [];
+
+  for (let distance = radius; distance > 0; distance--) {
+    const ring = coords
+      .filter(({ coord }) => hexDistance(coord, { q: 0, r: 0 }) === distance)
+      .sort((a, b) => {
+        const angle = ({ q, r }: { q: number; r: number }) =>
+          Math.atan2(1.5 * r, Math.sqrt(3) * (q + r / 2));
+        return angle(b.coord) - angle(a.coord);
+      });
+    const start = ring.findIndex(({ coord }) => coord.q === 0 && coord.r === -distance);
+    order.push(...ring.slice(start).map(({ id }) => id), ...ring.slice(0, start).map(({ id }) => id));
+  }
+  return [...order, '0,0'];
+}
+
 describe('board generation', () => {
   it('deals the exact component supply every time', () => {
     for (const b of boards) {
@@ -33,6 +52,17 @@ describe('board generation', () => {
           expect(hexDistance(parseHexId(reds[i]), parseHexId(reds[j]))).not.toBe(1);
         }
       }
+    }
+  });
+
+  it('places Classic number discs counterclockwise in letter order, skipping the desert', () => {
+    const order = letterOrderHexes();
+    for (const board of boards) {
+      expect(
+        order
+          .filter((h) => board.hexes[h].terrain !== 'desert')
+          .map((h) => board.hexes[h].token),
+      ).toEqual(BASE_GAME.tokens);
     }
   });
 
@@ -80,7 +110,7 @@ describe('maps', () => {
     }
   });
 
-  it('beginner is the same board every game', () => {
+  it('fixed-board option keeps the same layout every game', () => {
     expect(generateBoard(makeRng(1), BEGINNER).hexes).toEqual(generateBoard(makeRng(2), BEGINNER).hexes);
     expect(generateBoard(makeRng(1), BEGINNER).hexes['0,0'].terrain).toBe('desert');
   });

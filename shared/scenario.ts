@@ -57,16 +57,16 @@ export const BASE_GAME: Scenario = {
     ...repeat<Terrain>('mountains', 3),
     'desert',
   ],
-  // One each of 2 and 12, two each of 3-6 and 8-11. No 7.
-  tokens: [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12],
+  // Number-disc values in the rulebook's A-R order. No 7.
+  tokens: [5, 2, 6, 3, 8, 10, 9, 12, 11, 4, 8, 10, 9, 4, 5, 6, 3, 11],
   ports: BASE_PORTS,
 };
 
-/** The rulebook's "starting setup for beginners": the same island every time. */
+/** A beginner-friendly fixed board; the app retains its normal opening draft. */
 export const BEGINNER: Scenario = {
   id: 'beginner',
-  name: 'Beginner',
-  blurb: 'The fixed starter island from the rulebook. Same board every game.',
+  name: 'Fixed board',
+  blurb: 'A beginner-friendly fixed island using the normal opening draft.',
   coords: HEX_COORDS,
   fixed: true,
   // Top row first, left to right.

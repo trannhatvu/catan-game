@@ -52,9 +52,20 @@ function handSize(state: GameState, who: PlayerId): number {
   return RESOURCES.reduce((n, r) => n + p.resources[r], 0);
 }
 
+function runInitiative(state: GameState): GameState {
+  let s = state;
+  let guard = 0;
+  while (s.phase === 'initiative' && guard++ < 100) {
+    const who = s.players[s.current].id;
+    s = must(s, who, { type: 'rollForStart' });
+  }
+  if (s.phase === 'initiative') throw new Error('initiative roll-off did not finish');
+  return s;
+}
+
 /** Drive the snake draft to completion by always taking the first legal option. */
 function runSetup(state: GameState): GameState {
-  let s = state;
+  let s = runInitiative(state);
   let guard = 0;
   while (s.phase === 'setup' && guard++ < 50) {
     const who = s.players[s.current].id;
@@ -71,16 +82,69 @@ function runSetup(state: GameState): GameState {
 function intoMain(state: GameState): GameState {
   const s = structuredClone(state);
   s.phase = 'main';
+  s.current = 0;
+  s.initiative = null;
+  s.setup = null;
   s.mustRoll = false;
   s.dice = [3, 4];
   return s;
 }
 
 describe('setup draft', () => {
+  it('rerolls tied leaders and starts the snake draft with the highest roller', () => {
+    let s = createGame(SEATS, 1);
+    expect(s.phase).toBe('initiative');
+    expect(legalMoves(s, 'A').canRollForStart).toBe(true);
+    expect(legalMoves(s, 'B').canRollForStart).toBe(false);
+
+    s = must(s, 'A', { type: 'rollForStart' });
+    expect(s.initiative?.rolls.A).toBe(8);
+    s = must(s, 'B', { type: 'rollForStart' });
+    s = must(s, 'C', { type: 'rollForStart' });
+    expect(s.initiative?.eligible).toEqual(['A', 'B']);
+    expect(s.initiative?.rolls).toEqual({});
+
+    s = must(s, 'A', { type: 'rollForStart' });
+    expect(s.initiative?.rolls.A).toBe(12);
+    s = must(s, 'B', { type: 'rollForStart' });
+    expect(s.phase).toBe('setup');
+    expect(s.setup?.order).toEqual(['A', 'B', 'C']);
+    expect(s.players[s.current].id).toBe('A');
+
+    const settlementOrder: PlayerId[] = [];
+    while (s.phase === 'setup') {
+      const who = s.players[s.current].id;
+      const moves = legalMoves(s, who);
+      if (s.setup!.placing === 'settlement') {
+        settlementOrder.push(who);
+        s = must(s, who, { type: 'placeSetupSettlement', vertex: moves.settlementSpots[0] });
+      } else {
+        s = must(s, who, { type: 'placeSetupRoad', edge: moves.roadSpots[0] });
+      }
+    }
+    expect(settlementOrder).toEqual(['A', 'B', 'C', 'C', 'B', 'A']);
+    expect(s.players[s.current].id).toBe('A');
+  });
+
+  it('rotates draft order and first-turn order when a later seat wins', () => {
+    let s = runInitiative(createGame(SEATS, 2));
+    expect(s.setup?.order).toEqual(['B', 'C', 'A']);
+    expect(s.players[s.current].id).toBe('B');
+
+    s = runSetup(s);
+    expect(s.players[s.current].id).toBe('B');
+    s.phase = 'main';
+    s.mustRoll = false;
+    s = must(s, 'B', { type: 'endTurn' });
+    expect(s.players[s.current].id).toBe('C');
+  });
+
   it('runs a snake order and ends with two settlements and two roads each', () => {
-    const s = runSetup(createGame(SEATS, 7));
+    const started = runInitiative(createGame(SEATS, 7));
+    const firstPlayer = started.setup!.order[0];
+    const s = runSetup(started);
     expect(s.phase).toBe('rolling');
-    expect(s.current).toBe(0);
+    expect(s.players[s.current].id).toBe(firstPlayer);
 
     for (const p of s.players) {
       const buildings = Object.values(s.board.buildings).filter((b) => b.owner === p.id);
@@ -93,7 +157,7 @@ describe('setup draft', () => {
   });
 
   it('pays out only for the second settlement', () => {
-    let s = createGame(SEATS, 7);
+    let s = runInitiative(createGame(SEATS, 7));
     // First round: three settlements + roads, nobody collects anything.
     for (let i = 0; i < 3; i++) {
       const who = s.players[s.current].id;
@@ -111,31 +175,34 @@ describe('setup draft', () => {
   });
 
   it('refuses a settlement touching another and a road that floats free', () => {
-    let s = createGame(SEATS, 7);
-    const vertex = legalMoves(s, 'A').settlementSpots[0];
-    s = must(s, 'A', { type: 'placeSetupSettlement', vertex });
+    let s = runInitiative(createGame(SEATS, 7));
+    const first = s.players[s.current].id;
+    const second = s.setup!.order[1];
+    const vertex = legalMoves(s, first).settlementSpots[0];
+    s = must(s, first, { type: 'placeSetupSettlement', vertex });
 
-    const road = legalMoves(s, 'A').roadSpots[0];
-    s = must(s, 'A', { type: 'placeSetupRoad', edge: road });
+    const road = legalMoves(s, first).roadSpots[0];
+    s = must(s, first, { type: 'placeSetupRoad', edge: road });
 
-    // Bob now tries the neighbour of Ann's settlement.
+    // The next player tries the neighbour of the first settlement.
     const tooClose = BOARD.vertexNeighbours[vertex][0];
-    expect(expectRejected(s, 'B', { type: 'placeSetupSettlement', vertex: tooClose })).toMatch(/too close/i);
+    expect(expectRejected(s, second, { type: 'placeSetupSettlement', vertex: tooClose })).toMatch(/too close/i);
 
     // And a road nowhere near his own settlement.
-    const bobSpot = legalMoves(s, 'B').settlementSpots.find((v) => !BOARD.vertexNeighbours[vertex].includes(v))!;
-    s = must(s, 'B', { type: 'placeSetupSettlement', vertex: bobSpot });
+    const secondSpot = legalMoves(s, second).settlementSpots.find((v) => !BOARD.vertexNeighbours[vertex].includes(v))!;
+    s = must(s, second, { type: 'placeSetupSettlement', vertex: secondSpot });
     const detached = Object.keys(BOARD.edges).find(
-      (e) => !BOARD.edges[e].vertices.includes(bobSpot) && !s.board.roads[e],
+      (e) => !BOARD.edges[e].vertices.includes(secondSpot) && !s.board.roads[e],
     )!;
-    expect(expectRejected(s, 'B', { type: 'placeSetupRoad', edge: detached })).toMatch(/must touch/i);
+    expect(expectRejected(s, second, { type: 'placeSetupRoad', edge: detached })).toMatch(/must touch/i);
   });
 
   it('will not let a player act out of turn', () => {
-    const s = createGame(SEATS, 7);
-    expect(expectRejected(s, 'B', { type: 'placeSetupSettlement', vertex: BOARD.hexVertices['0,0'][0] })).toMatch(
-      /not your turn/i,
-    );
+    const s = runInitiative(createGame(SEATS, 7));
+    const other = s.players.find((p) => p.id !== s.players[s.current].id)!.id;
+    expect(
+      expectRejected(s, other, { type: 'placeSetupSettlement', vertex: BOARD.hexVertices['0,0'][0] }),
+    ).toMatch(/not your turn/i);
   });
 });
 
@@ -343,7 +410,8 @@ describe('longest road', () => {
 
     // Bob builds a longer chain far away.
     chain(s, 'B', BOARD.hexVertices[hexId({ q: 2, r: -2 })][2], 7);
-    const bobsTurn = intoMain({ ...structuredClone(s), current: 1 });
+    const bobsTurn = intoMain(structuredClone(s));
+    bobsTurn.current = 1;
     const after = must(give(bobsTurn, 'B', { brick: 1, lumber: 1 }), 'B', {
       type: 'buildRoad',
       edge: legalMoves(give(bobsTurn, 'B', { brick: 1, lumber: 1 }), 'B').roadSpots[0],
@@ -450,6 +518,7 @@ describe('development cards', () => {
 
   it('still makes you roll when a knight is played before the roll', () => {
     let s = runSetup(createGame(SEATS, 7));
+    s.current = 0;
     s.turn = 5;
     s = grant(s, 'A', 'knight');
     expect(s.phase).toBe('rolling');
@@ -511,6 +580,80 @@ describe('trading', () => {
     expect(playerById(s, 'A')!.resources.ore).toBe(1);
     expect(playerById(s, 'B')!.resources.ore).toBe(bOre - 1);
     expect(playerById(s, 'B')!.resources.brick).toBe(2);
+  });
+
+  it('lets a responder counter and the active player accept the counteroffer', () => {
+    let s = clearHands(intoMain(runSetup(createGame(SEATS, 7))));
+    s = give(s, 'A', { brick: 2 });
+    s = give(s, 'B', { ore: 2 });
+    s = must(s, 'A', {
+      type: 'offerTrade',
+      give: { ...emptyResources(), brick: 1 },
+      want: { ...emptyResources(), ore: 1 },
+    });
+
+    s = must(s, 'B', {
+      type: 'counterTrade',
+      give: { ...emptyResources(), ore: 2 },
+      want: { ...emptyResources(), brick: 1 },
+    });
+    expect(s.trade?.responses.B).toBe('counter');
+    expect(s.trade?.counter).toEqual({
+      from: 'B',
+      give: { ...emptyResources(), ore: 2 },
+      want: { ...emptyResources(), brick: 1 },
+    });
+    expect(legalMoves(s, 'A').mustAnswerCounter).toBe(true);
+    expect(legalMoves(s, 'B').mustAnswerTrade).toBe(false);
+    expect(legalMoves(s, 'C').canCounterTrade).toBe(false);
+
+    s = must(s, 'A', { type: 'respondCounterTrade', accept: true });
+    expect(s.trade).toBeNull();
+    expect(playerById(s, 'A')!.resources).toMatchObject({ brick: 1, ore: 2 });
+    expect(playerById(s, 'B')!.resources).toMatchObject({ brick: 1, ore: 0 });
+  });
+
+  it('rejects invalid counteroffers and lets the active player decline one', () => {
+    let s = clearHands(intoMain(runSetup(createGame(SEATS, 7))));
+    s = give(s, 'A', { brick: 1 });
+    s = give(s, 'B', { ore: 1 });
+    s = give(s, 'C', { grain: 1 });
+    s = must(s, 'A', {
+      type: 'offerTrade',
+      give: { ...emptyResources(), brick: 1 },
+      want: { ...emptyResources(), ore: 1 },
+    });
+    expect(
+      expectRejected(s, 'B', {
+        type: 'counterTrade',
+        give: { ...emptyResources(), ore: 1 },
+        want: { ...emptyResources(), ore: 1 },
+      }),
+    ).toMatch(/same resource type/i);
+    expect(
+      expectRejected(s, 'B', {
+        type: 'counterTrade',
+        give: { ...emptyResources(), ore: 2 },
+        want: { ...emptyResources(), brick: 1 },
+      }),
+    ).toMatch(/do not hold/i);
+    expect(
+      expectRejected(s, 'B', {
+        type: 'counterTrade',
+        give: { ...emptyResources(), ore: 1 },
+        want: { ...emptyResources(), grain: 1 },
+      }),
+    ).toMatch(/they do not hold/i);
+
+    s = must(s, 'B', {
+      type: 'counterTrade',
+      give: { ...emptyResources(), ore: 1 },
+      want: { ...emptyResources(), brick: 1 },
+    });
+    s = must(s, 'A', { type: 'respondCounterTrade', accept: false });
+    expect(s.trade?.counter).toBeNull();
+    expect(s.trade?.responses.B).toBe('reject');
+    expect(legalMoves(s, 'B').canCounterTrade).toBe(false);
   });
 
   it('refuses an offer of cards you do not hold', () => {
@@ -607,6 +750,11 @@ describe('a full scripted game', () => {
     let s = createGame(SEATS, seed);
     let guard = 0;
 
+    while (s.phase === 'initiative' && guard++ < 100) {
+      const who = s.players[s.current].id;
+      s = must(s, who, { type: 'rollForStart' });
+    }
+
     // Spread the opening settlements out; clustering them starves the board of
     // three of the five resources and the game never goes anywhere.
     while (s.phase === 'setup' && guard++ < 50) {
@@ -701,7 +849,13 @@ function payout(state: GameState, roll: number): GameState {
 function seedRolling7(): number {
   const probe = createGame(SEATS, 1);
   for (let seed = 1; seed < 5000; seed++) {
-    const s = { ...structuredClone(probe), phase: 'rolling' as const, setup: null, rng: { seed } };
+    const s = {
+      ...structuredClone(probe),
+      phase: 'rolling' as const,
+      initiative: null,
+      setup: null,
+      rng: { seed },
+    };
     const r = applyAction(s, 'A', { type: 'rollDice' });
     if (r.ok && r.state.dice![0] + r.state.dice![1] === 7) return seed;
   }
