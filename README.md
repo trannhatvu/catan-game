@@ -38,6 +38,11 @@ given seed. It is the quickest way to see whether a change to the rules broke
 something: it prints the play-by-play, the final scoreboard, and checks that no
 resource or development card was conjured up or lost along the way.
 
+If [just](https://just.systems/) is installed, `just` lists shortcuts for these
+commands. For example, use `just dev`, `just test`, or
+`just test shared/__tests__/rules.test.ts`. `just deploy` builds and starts the
+production server locally; it does not deploy to a remote host.
+
 ## How it is put together
 
 **The server decides everything.** One pure reducer in `shared/rules.ts` is the
