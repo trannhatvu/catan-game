@@ -551,10 +551,7 @@ function reduce(state: GameState, me: Player, action: Action): ApplyResult | und
 
     case 'steal': {
       if (state.phase !== 'stealing') return fail('There is nobody to steal from.');
-      if (action.target === null) {
-        finishRobber(state);
-        return;
-      }
+      if (action.target === null) return fail('You must steal from an eligible player.');
       if (!state.stealTargets.includes(action.target)) return fail('You cannot steal from that player.');
       stealFrom(state, action.target);
       finishRobber(state);
@@ -658,6 +655,9 @@ function reduce(state: GameState, me: Player, action: Action): ApplyResult | und
       const give = sanitiseCounts(action.give);
       const want = sanitiseCounts(action.want);
       if (isEmpty(give) || isEmpty(want)) return fail('An offer needs cards on both sides.');
+      if (RESOURCES.some((r) => give[r] > 0 && want[r] > 0)) {
+        return fail('You cannot trade the same resource type on both sides.');
+      }
       if (!RESOURCES.every((r) => me.resources[r] >= give[r])) return fail('You do not hold what you are offering.');
       if (!state.players.some((p) => p.id !== me.id && canAfford(p, want))) return fail('Nobody holds what you want.');
 
