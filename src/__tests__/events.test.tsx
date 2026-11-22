@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { BOARD } from '../../shared/layout';
 import { viewFor } from '../../shared/redact';
 import { applyAction, createGame, legalMoves } from '../../shared/rules';
 import { RESOURCES, type GameState } from '../../shared/types';
-import { detectRoll } from '../fx/events';
+import { detectRoll, detectSoundCues } from '../fx/events';
 
 const SEATS = [
   { id: 'A', name: 'Ann' },
@@ -65,6 +66,8 @@ describe('detectRoll', () => {
           }
           // A view with nothing new is not a roll.
           expect(detectRoll(after, after)).toBeNull();
+          expect(detectSoundCues(before, after)).toContain('roll');
+          expect(detectSoundCues(before, after).includes('resource')).toBe(ev.flights.length > 0);
         }
         rolls++;
         if (r.state.dice![0] + r.state.dice![1] !== 7 && r.state.phase === 'main') producingRolls++;
@@ -79,5 +82,35 @@ describe('detectRoll', () => {
     }
     expect(rolls).toBeGreaterThan(100);
     expect(producingRolls).toBeGreaterThan(50);
+  });
+});
+
+describe('detectSoundCues', () => {
+  const state = draft(createGame(SEATS, 7));
+  const before = viewFor(state, 'A');
+
+  it('does not play for an initial view or an unchanged view', () => {
+    expect(detectSoundCues(null, before)).toEqual([]);
+    expect(detectSoundCues(before, before)).toEqual([]);
+  });
+
+  it('detects construction, robber movement, and victory once', () => {
+    const built = structuredClone(before);
+    const edge = Object.keys(BOARD.edges).find((id) => !built.board.roads[id]);
+    if (!edge) throw new Error('test board has no free road edge');
+    built.board.roads[edge] = { owner: 'A' };
+    expect(detectSoundCues(before, built)).toEqual(['build']);
+    expect(detectSoundCues(built, built)).toEqual([]);
+
+    const movedRobber = structuredClone(before);
+    const newRobberHex = Object.keys(movedRobber.board.hexes).find(
+      (id) => id !== before.board.robber,
+    );
+    if (!newRobberHex) throw new Error('test board has no alternate robber hex');
+    movedRobber.board.robber = newRobberHex;
+    expect(detectSoundCues(before, movedRobber)).toEqual(['robber']);
+
+    const won = { ...before, winner: 'A' };
+    expect(detectSoundCues(before, won)).toEqual(['victory']);
   });
 });

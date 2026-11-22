@@ -448,6 +448,87 @@ h3 {
   color: var(--text);
 }
 
+.sound-control {
+  position: relative;
+  flex: none;
+}
+
+.sound-summary {
+  display: grid;
+  width: 36px;
+  height: 32px;
+  padding: 6px;
+  place-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sound-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sound-summary svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sound-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  display: grid;
+  width: 220px;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--panel-line);
+  border-radius: 12px;
+  background: var(--panel-raised);
+  box-shadow: 0 12px 30px #0008;
+}
+
+.sound-enable {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  background: var(--panel-well);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sound-volume {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.sound-volume input {
+  width: 100%;
+  accent-color: var(--brass);
+}
+
+.sound-volume output {
+  min-width: 34px;
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .board3d-reset {
   position: absolute;
   right: 14px;

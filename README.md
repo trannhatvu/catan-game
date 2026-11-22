@@ -9,6 +9,7 @@ that enforces every rule.
 - Rulebook-aligned setup and play: dice-based first-player selection with tie
   rerolls, snake draft, robber, trades and counteroffers, development cards,
   longest road, largest army and ten points to win
+- Optional Kenney CC0 sound effects with saved mute and volume controls
 - Real-time multiplayer over Socket.IO with four-letter room codes
 - 3D board (three.js / react-three-fiber) with a 2D SVG fallback, switchable in-game
 - Reconnect by token: refresh or drop and you keep your seat and hand
@@ -44,6 +45,15 @@ If [just](https://just.systems/) is installed, `just` lists shortcuts for these
 commands. For example, use `just dev`, `just test`, or
 `just test shared/__tests__/rules.test.ts`. `just deploy` builds and starts the
 production server locally; it does not deploy to a remote host.
+
+## Sound effects
+
+Sound effects are off by default. In-game, open **Sound settings** to enable
+them and adjust the saved volume. The audio files are bundled locally from
+Kenney's CC0 [Casino Audio](https://kenney.nl/assets/casino-audio),
+[Impact Sounds](https://kenney.nl/assets/impact-sounds), and
+[Interface Sounds](https://kenney.nl/assets/interface-sounds) packs; their
+license notices are in [`public/audio/kenney`](./public/audio/kenney).
 
 ## Share a game from Windows + WSL2
 
