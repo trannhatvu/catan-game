@@ -6,9 +6,12 @@ import { HandBar, type Pending } from './ui/HandBar';
 import { Lobby } from './ui/Lobby';
 import { Rail } from './ui/Rail';
 import { CardFlights } from './ui/CardFlights';
+import { MusicControl } from './ui/MusicControl';
 import { SoundControl } from './ui/SoundControl';
 import { detectRoll, detectSoundCues, type RollFx } from './fx/events';
 import type { PlayerView } from '../shared/redact';
+import { musicSceneFor } from './audio/music';
+import { useBackgroundMusic } from './audio/useMusic';
 import { useSound } from './audio/useSound';
 import {
   DevCardModal,
@@ -22,13 +25,20 @@ import {
 
 export default function App() {
   const api = useGame();
+  const music = useBackgroundMusic(musicSceneFor(api.room?.started ?? false, api.view));
 
-  if (!api.room) return <Entrance api={api} />;
-  if (!api.room.started || !api.view) return <Lobby api={api} />;
-  return <Game api={api} />;
+  if (!api.room) return <Entrance api={api} music={music} />;
+  if (!api.room.started || !api.view) return <Lobby api={api} music={music} />;
+  return <Game api={api} music={music} />;
 }
 
-function Game({ api }: { api: ReturnType<typeof useGame> }) {
+function Game({
+  api,
+  music,
+}: {
+  api: ReturnType<typeof useGame>;
+  music: ReturnType<typeof useBackgroundMusic>;
+}) {
   const view = api.view!;
   const [pending, setPending] = useState<Pending>(null);
   const [showTrade, setShowTrade] = useState(false);
@@ -108,6 +118,12 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
           error={sound.error}
           onToggle={() => void sound.toggleEnabled()}
           onVolumeChange={sound.setVolume}
+        />
+        <MusicControl
+          preferences={music.preferences}
+          error={music.error}
+          onToggle={() => void music.toggleEnabled()}
+          onVolumeChange={music.setVolume}
         />
         <div className="turn-banner" data-mine={view.moves.isMyTurn && !view.winner}>
           <span className="turn-dot" style={{ ['--turn-color' as string]: current?.color ?? 'transparent' }} />

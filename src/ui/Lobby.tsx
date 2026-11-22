@@ -1,11 +1,13 @@
 import { PLAYER_COLORS } from '../../shared/rules';
 import { MAPS, isMapId } from '../../shared/scenario';
 import type { GameApi } from '../net/useGame';
+import type { BackgroundMusicControls } from '../audio/useMusic';
+import { MusicControl } from './MusicControl';
 
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 4;
 
-export function Lobby({ api }: { api: GameApi }) {
+export function Lobby({ api, music }: { api: GameApi; music: BackgroundMusicControls }) {
   const room = api.room!;
   const isHost = room.hostId === api.me;
   const online = room.players.filter((p) => p.connected).length;
@@ -66,6 +68,15 @@ export function Lobby({ api }: { api: GameApi }) {
         <button className="btn" style={{ width: '100%', marginTop: 10 }} onClick={api.leave}>
           Leave lobby
         </button>
+        <div className="music-control-row">
+          <span>Background music</span>
+          <MusicControl
+            preferences={music.preferences}
+            error={music.error}
+            onToggle={() => void music.toggleEnabled()}
+            onVolumeChange={music.setVolume}
+          />
+        </div>
       </div>
     </div>
   );

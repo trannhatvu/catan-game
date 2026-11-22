@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { MAPS } from '../../shared/scenario';
 import { savedSeats, type GameApi } from '../net/useGame';
 import type { RoomSummary } from '../../server/rooms';
+import type { BackgroundMusicControls } from '../audio/useMusic';
+import { MusicControl } from './MusicControl';
 
 const MAX_PLAYERS = 4;
 
@@ -25,7 +27,7 @@ function useLobbies(): RoomSummary[] {
   return rooms;
 }
 
-export function Entrance({ api }: { api: GameApi }) {
+export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicControls }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -135,6 +137,15 @@ export function Entrance({ api }: { api: GameApi }) {
           </>
         )}
 
+        <div className="music-control-row">
+          <span>Background music</span>
+          <MusicControl
+            preferences={music.preferences}
+            error={music.error}
+            onToggle={() => void music.toggleEnabled()}
+            onVolumeChange={music.setVolume}
+          />
+        </div>
         {!api.connected && <div className="notice">Connecting to the server…</div>}
         {(problem ?? api.error) && <div className="notice">{problem ?? api.error}</div>}
       </div>
