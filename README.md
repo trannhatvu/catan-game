@@ -17,6 +17,35 @@ that enforces every rule.
 - Games persist to disk, so a server restart doesn't end them
 - Server-authoritative: the client can only offer moves the server says are legal
 
+## Demo screenshots
+
+These screenshots are from a local demo session; displayed room codes are not
+live.
+
+| Main menu | Two-player lobby |
+| --- | --- |
+| ![Main menu](./docs/screenshots/main-menu.png) | ![Two-player lobby](./docs/screenshots/lobby.png) |
+
+| Opening setup in 2D | Opening setup in 3D |
+| --- | --- |
+| ![2D opening setup](./docs/screenshots/game-opening-2d.png) | ![3D opening setup](./docs/screenshots/game-opening-3d.png) |
+
+| First-player dice roll in 2D | First-player dice roll in 3D |
+| --- | --- |
+| ![First-player roll in 2D](./docs/screenshots/initiative-roll.png) | ![First-player roll in 3D](./docs/screenshots/initiative-roll-3d.png) |
+
+| Legal settlement spots | Initial 2D board |
+| --- | --- |
+| ![Legal settlement spots](./docs/screenshots/setup-settlement.png) | ![Initial 2D board](./docs/screenshots/game-2d-setup.png) |
+
+| Initial 3D board | Vietnamese interface |
+| --- | --- |
+| ![Initial 3D board](./docs/screenshots/game-3d-setup.png) | ![Vietnamese main menu](./docs/screenshots/menu-vietnamese.png) |
+
+| Background music controls | Sound effect controls |
+| --- | --- |
+| ![Background music controls](./docs/screenshots/music-settings.png) | ![Sound effect controls](./docs/screenshots/sound-settings.png) |
+
 ## Getting started
 
 Requires Node.js 20+.
