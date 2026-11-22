@@ -6,8 +6,10 @@ import { HandBar, type Pending } from './ui/HandBar';
 import { Lobby } from './ui/Lobby';
 import { Rail } from './ui/Rail';
 import { CardFlights } from './ui/CardFlights';
-import { detectRoll, type RollFx } from './fx/events';
+import { SoundControl } from './ui/SoundControl';
+import { detectRoll, detectSoundCues, type RollFx } from './fx/events';
 import type { PlayerView } from '../shared/redact';
+import { useSound } from './audio/useSound';
 import {
   DevCardModal,
   DiscardModal,
@@ -32,7 +34,15 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
   const [showTrade, setShowTrade] = useState(false);
   const [showCards, setShowCards] = useState(false);
   const boardMode = useBoardMode();
+  const sound = useSound();
   const roll = useRoll(view);
+  const previousSoundView = useRef<PlayerView | null>(null);
+
+  useEffect(() => {
+    const cues = detectSoundCues(previousSoundView.current, view);
+    previousSoundView.current = view;
+    cues.forEach(sound.play);
+  }, [sound.play, view]);
 
   // Some prompts are not optional: during setup and after a 7 the game is
   // waiting on one specific click, so the board asks for it directly.
@@ -93,6 +103,12 @@ function Game({ api }: { api: ReturnType<typeof useGame> }) {
             {boardMode.is3d ? '2D view' : '3D view'}
           </button>
         )}
+        <SoundControl
+          preferences={sound.preferences}
+          error={sound.error}
+          onToggle={() => void sound.toggleEnabled()}
+          onVolumeChange={sound.setVolume}
+        />
         <div className="turn-banner" data-mine={view.moves.isMyTurn && !view.winner}>
           <span className="turn-dot" style={{ ['--turn-color' as string]: current?.color ?? 'transparent' }} />
           {view.winner

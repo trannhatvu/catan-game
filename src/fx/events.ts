@@ -2,6 +2,7 @@ import type { HexId, Point } from '../../shared/layout';
 import { graphOf } from '../../shared/scenario';
 import type { PlayerView } from '../../shared/redact';
 import { RESOURCES, TERRAIN_YIELD, type PlayerId, type Resource } from '../../shared/types';
+import type { SoundCue } from '../audio/sound';
 
 /** One card travelling from the hex that produced it to the player who got it. */
 export type Flight = {
@@ -72,4 +73,28 @@ export function detectRoll(prev: PlayerView | null, next: PlayerView): RollEvent
   });
 
   return { dice: next.dice, producing, flights };
+}
+
+/** Sound cues for public state changes; never infer events from localized log text. */
+export function detectSoundCues(prev: PlayerView | null, next: PlayerView): SoundCue[] {
+  if (!prev || prev.board.map !== next.board.map || prev.you?.id !== next.you?.id) return [];
+
+  const cues: SoundCue[] = [];
+  const roll = detectRoll(prev, next);
+  if (roll) {
+    cues.push('roll');
+    if (roll.flights.length > 0) cues.push('resource');
+  }
+
+  const builtRoad = Object.entries(next.board.roads).some(
+    ([edge, road]) => prev.board.roads[edge]?.owner !== road.owner,
+  );
+  const builtBuilding = Object.entries(next.board.buildings).some(([vertex, building]) => {
+    const before = prev.board.buildings[vertex];
+    return !before || before.owner !== building.owner || before.type !== building.type;
+  });
+  if (builtRoad || builtBuilding) cues.push('build');
+  if (prev.board.robber !== next.board.robber) cues.push('robber');
+  if (prev.winner === null && next.winner !== null) cues.push('victory');
+  return cues;
 }
