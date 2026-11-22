@@ -474,7 +474,9 @@ function reduce(state: GameState, me: Player, action: Action): ApplyResult | und
         return fail('You have already rolled.');
       }
 
-      const score = rollDie(state.rng) + rollDie(state.rng);
+      const dice: [number, number] = [rollDie(state.rng), rollDie(state.rng)];
+      const score = dice[0] + dice[1];
+      state.dice = dice;
       state.initiative.rolls[me.id] = score;
       addLog(state, me.id, `rolls ${score} to choose the first player.`);
 

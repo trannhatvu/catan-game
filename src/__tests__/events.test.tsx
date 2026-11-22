@@ -35,6 +35,20 @@ function draft(state: GameState): GameState {
 }
 
 describe('detectRoll', () => {
+  it('animates initiative rolls with their actual dice result', () => {
+    const state = createGame(SEATS, 7);
+    const before = viewFor(state, 'A');
+    const result = applyAction(state, 'A', { type: 'rollForStart' });
+    if (!result.ok) throw new Error(result.error);
+
+    const after = viewFor(result.state, 'A');
+    const score = after.initiative?.rolls.A;
+    expect(after.dice).not.toBeNull();
+    expect(score).toBe(after.dice![0] + after.dice![1]);
+    expect(detectRoll(before, after)).toEqual({ dice: after.dice, producing: [], flights: [] });
+    expect(detectSoundCues(before, after)).toContain('roll');
+  });
+
   it('reports each roll once, with flights matching exactly what each hand gained', () => {
     let rolls = 0;
     let producingRolls = 0;
