@@ -11,6 +11,7 @@ import type { PlayerView } from '../../shared/redact';
 import { graphOf } from '../../shared/scenario';
 import type { Terrain } from '../../shared/types';
 import type { RollFx } from '../fx/events';
+import { useI18n } from '../i18n';
 import { useBoardViewport } from './useBoardViewport';
 import {
   CityPiece,
@@ -128,6 +129,7 @@ function Sea() {
 }
 
 export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardProps) {
+  const { t } = useI18n();
   const viewport = useBoardViewport();
   const { board, moves } = view;
   const g = graphOf(board);
@@ -253,7 +255,7 @@ export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardPro
            ))}
          </svg>
 
-         <svg viewBox={box} role="img" aria-label="Catan board">
+         <svg viewBox={box} role="img" aria-label={t('catanBoard')}>
            <defs>
           {TERRAINS.map((t) => (
             <linearGradient key={t} id={`terrain-${t}`} x1="0.15" y1="0" x2="0.85" y2="1">
@@ -465,9 +467,9 @@ export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardPro
         type="button"
         data-board-control
         onClick={viewport.reset}
-        title="Reset view"
+        title={t('resetView')}
       >
-        Reset view
+        {t('resetView')}
       </button>
     </div>
   );

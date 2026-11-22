@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { BoardProps } from '../board/Board';
+import { useI18n } from '../i18n';
 import { frameRadius, setActiveMap } from './coords';
 import { Decor } from './Decor';
 import { Ocean } from './Ocean';
@@ -107,6 +108,7 @@ function WinSwoop({ controls, active }: { controls: React.RefObject<OrbitControl
 }
 
 export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }: BoardProps) {
+  const { t } = useI18n();
   const controls = useRef<OrbitControlsImpl>(null);
   const { board, moves } = view;
   // Before any child renders: they all read the island's shape from coords.
@@ -147,7 +149,7 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
         dpr={[1, 2]}
         camera={{ fov: FOV, near: 0.5, far: 120, position: [0, 12, 8] }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        aria-label="Catan board"
+        aria-label={t('catanBoard')}
       >
         <color attach="background" args={['#0a2231']} />
         <fog attach="fog" args={['#0a2231', 16 * scale, 40 * scale]} />
@@ -226,8 +228,8 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
         <WinSwoop controls={controls} active={!!view.winner} />
       </Canvas>
 
-      <button className="board3d-reset" onClick={resetView} title="Reset view">
-        Reset view
+      <button className="board3d-reset" onClick={resetView} title={t('resetView')}>
+        {t('resetView')}
       </button>
     </div>
   );

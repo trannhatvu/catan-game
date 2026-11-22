@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { MAPS } from '../../shared/scenario';
 import { savedSeats, type GameApi } from '../net/useGame';
 import type { RoomSummary } from '../../server/rooms';
 import type { BackgroundMusicControls } from '../audio/useMusic';
 import { MusicControl } from './MusicControl';
+import { LanguageControl } from './LanguageControl';
+import { localizedMapName, translateServerMessage, useI18n } from '../i18n';
 
 const MAX_PLAYERS = 4;
 
@@ -28,6 +29,7 @@ function useLobbies(): RoomSummary[] {
 }
 
 export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicControls }) {
+  const { language, t } = useI18n();
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -62,32 +64,30 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
         <div className="wordmark">
           Cat<span>a</span>n
         </div>
-        <p className="entrance-lede">
-          Settle the island with friends. One of you starts a game and shares the code; everyone else joins with it.
-        </p>
+        <p className="entrance-lede">{t('entranceLede')}</p>
 
         <form onSubmit={host}>
           <label className="field">
-            <span className="field-label">Your name</span>
+            <span className="field-label">{t('yourName')}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ann"
+              placeholder={language === 'vi' ? 'An' : 'Ann'}
               maxLength={16}
               autoComplete="nickname"
             />
           </label>
 
           <button className="btn btn-primary" type="submit" disabled={busy || !api.connected} style={{ width: '100%' }}>
-            Start a new game
+            {t('startNewGame')}
           </button>
         </form>
 
-        <div className="divider">or join one</div>
+        <div className="divider">{t('orJoinOne')}</div>
 
         <form onSubmit={join}>
           <label className="field">
-            <span className="field-label">Game code</span>
+            <span className="field-label">{t('gameCode')}</span>
             <input
               className="code-input"
               value={code}
@@ -99,27 +99,27 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
             />
           </label>
           <button className="btn" type="submit" disabled={busy || !api.connected} style={{ width: '100%' }}>
-            Join game
+            {t('joinGame')}
           </button>
         </form>
 
         {lobbies.length > 0 && (
           <>
-            <div className="divider">lobbies</div>
+            <div className="divider">{t('lobbies')}</div>
             <ul className="seat-list">
               {lobbies.map((r) => {
                 const open = !r.started && (r.players < MAX_PLAYERS || r.connected < r.players);
                 return (
                   <li key={r.code} className="seat">
                     <span className="seat-name">
-                      <span className="room-code">{r.code}</span> {MAPS[r.map]?.name}
+                      <span className="room-code">{r.code}</span> {localizedMapName(language, r.map)}
                     </span>
                     <span className="seat-tag">
-                      {r.finished ? 'finished' : r.started ? 'playing' : `${r.connected}/${MAX_PLAYERS}`}
+                      {r.finished ? t('finished') : r.started ? t('playing') : t('connectedPlayers', { connected: r.connected, max: MAX_PLAYERS })}
                     </span>
                     {r.code in mine ? (
                       <button className="btn" disabled={busy || !api.connected} onClick={() => void run(() => api.resume(r.code))}>
-                        Resume
+                        {t('resume')}
                       </button>
                     ) : (
                       <button
@@ -127,7 +127,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
                         disabled={busy || !api.connected || !open}
                         onClick={() => void run(() => api.joinRoom(r.code, name))}
                       >
-                        Join
+                        {t('join')}
                       </button>
                     )}
                   </li>
@@ -138,7 +138,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
         )}
 
         <div className="music-control-row">
-          <span>Background music</span>
+          <span>{t('backgroundMusic')}</span>
           <MusicControl
             preferences={music.preferences}
             error={music.error}
@@ -146,8 +146,12 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
             onVolumeChange={music.setVolume}
           />
         </div>
-        {!api.connected && <div className="notice">Connecting to the server…</div>}
-        {(problem ?? api.error) && <div className="notice">{problem ?? api.error}</div>}
+        <div className="language-control-row">
+          <span>{t('language')}</span>
+          <LanguageControl compact />
+        </div>
+        {!api.connected && <div className="notice">{t('connecting')}</div>}
+        {(problem ?? api.error) && <div className="notice">{translateServerMessage(problem ?? api.error!, language)}</div>}
       </div>
     </div>
   );
