@@ -73,6 +73,11 @@ describe('board rendering', () => {
     expect(occurrences(markup, 'class="spot"')).toBe(0);
   });
 
+  it('renders the pan-and-zoom viewport with a reset control', () => {
+    expect(markup).toContain('class="board2d-viewport"');
+    expect(markup).toContain('Reset view');
+  });
+
   it('shows exactly the legal spots when a placement is pending', () => {
     const rolled = { ...state, phase: 'main' as const, mustRoll: false };
     const rich = structuredClone(rolled);
