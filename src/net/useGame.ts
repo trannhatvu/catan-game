@@ -149,7 +149,11 @@ export function useGame(): GameApi {
       socket.emit(
         event,
         payload,
-        (res: { ok: true; code: string; token: string; playerId: PlayerId } | { ok: false; error: string }) => {
+        (
+          res:
+            | { ok: true; code: string; token: string; playerId: PlayerId; persisted: boolean }
+            | { ok: false; error: string },
+        ) => {
           if (!res.ok) return resolve(res.error);
           saveSession({ code: res.code, token: res.token });
           saveSeat(res.code, res.token);

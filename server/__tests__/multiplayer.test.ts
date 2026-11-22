@@ -41,14 +41,22 @@ class Client {
 
   private emitWithAck(event: string, payload: object): Promise<{ ok: boolean; error?: string }> {
     return new Promise((resolve) => {
-      this.socket.emit(event, payload, (res: { ok: true; code: string; token: string; playerId: string } | { ok: false; error: string }) => {
-        if (res.ok) {
-          this.code = res.code;
-          this.token = res.token;
-          this.id = res.playerId;
-        }
-        resolve(res.ok ? { ok: true } : { ok: false, error: res.error });
-      });
+      this.socket.emit(
+        event,
+        payload,
+        (
+          res:
+            | { ok: true; code: string; token: string; playerId: string; persisted: boolean }
+            | { ok: false; error: string },
+        ) => {
+          if (res.ok) {
+            this.code = res.code;
+            this.token = res.token;
+            this.id = res.playerId;
+          }
+          resolve(res.ok ? { ok: true } : { ok: false, error: res.error });
+        },
+      );
     });
   }
 

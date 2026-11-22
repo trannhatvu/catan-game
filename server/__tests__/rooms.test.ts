@@ -1,8 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_SEATS,
   act,
   createRoom,
+  enablePersistence,
   getRoom,
   joinRoom,
   leaveRoom,
@@ -11,6 +15,7 @@ import {
   resetRooms,
   roomCount,
   roomsSnapshot,
+  saveRooms,
   setMap,
   startGame,
   sweepStaleRooms,
@@ -234,5 +239,103 @@ describe('map choice', () => {
     expect(room.state!.board.map).toBe('large');
     expect(Object.keys(room.state!.board.hexes)).toHaveLength(30);
     expect(setMap(room, seat.playerId, 'classic')).toMatch(/already started/i);
+  });
+});
+
+describe('room persistence', () => {
+  let directory: string;
+
+  beforeEach(() => {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), 'catan-room-store-'));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetRooms();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  const file = () => path.join(directory, 'rooms.json');
+
+  it('starts empty when the save file does not exist and creates it on save', () => {
+    enablePersistence(file());
+    expect(roomCount()).toBe(0);
+
+    createRoom('Ann', nextSocket());
+    saveRooms();
+
+    expect(JSON.parse(fs.readFileSync(file(), 'utf8'))).toHaveLength(1);
+  });
+
+  it('restores games with all seats marked disconnected', () => {
+    enablePersistence(file());
+    const { room, seats } = openRoom(['Ann', 'Bob']);
+    expect(startGame(room, seats[0].playerId)).toBeNull();
+    saveRooms();
+    resetRooms();
+
+    enablePersistence(file());
+
+    const restored = getRoom(room.code)!;
+    expect(restored.state).not.toBeNull();
+    expect(restored.seats.every((seat) => seat.socketId === null)).toBe(true);
+    expect(restored.state!.players.every((player) => !player.connected)).toBe(true);
+  });
+
+  it('fails clearly on invalid JSON without clearing the current store', () => {
+    const existing = createRoom('Existing', nextSocket());
+    fs.writeFileSync(file(), '{');
+
+    expect(() => enablePersistence(file())).toThrow(/not valid JSON/i);
+    expect(getRoom(existing.room.code)).toBeDefined();
+  });
+
+  it('fails clearly when the save path cannot be read', () => {
+    fs.mkdirSync(file());
+
+    expect(() => enablePersistence(file())).toThrow(/failed to read room data/i);
+  });
+
+  it('rejects invalid room data without partially loading valid entries', () => {
+    const validRoom = createRoom('Ann', nextSocket()).room;
+    fs.writeFileSync(file(), JSON.stringify([validRoom, { ...validRoom, code: 'bad!' }]));
+    resetRooms();
+
+    expect(() => enablePersistence(file())).toThrow(/invalid structure/i);
+    expect(roomCount()).toBe(0);
+  });
+
+  it('rejects malformed saved game state before loading any rooms', () => {
+    const validRoom = createRoom('Ann', nextSocket()).room;
+    const { room, seats } = openRoom(['Bob', 'Cid']);
+    expect(startGame(room, seats[0].playerId)).toBeNull();
+    room.state!.bank.ore = -1;
+    fs.writeFileSync(file(), JSON.stringify([validRoom, room]));
+    resetRooms();
+
+    expect(() => enablePersistence(file())).toThrow(/invalid structure/i);
+    expect(roomCount()).toBe(0);
+  });
+
+  it('preserves the previous save when writing or renaming a new save fails', () => {
+    enablePersistence(file());
+    createRoom('Ann', nextSocket());
+    saveRooms();
+    const previousSave = fs.readFileSync(file(), 'utf8');
+    createRoom('Bob', nextSocket());
+
+    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw new Error('simulated write failure');
+    });
+    expect(() => saveRooms()).toThrow(/failed to save room data/i);
+    expect(fs.readFileSync(file(), 'utf8')).toBe(previousSave);
+    write.mockRestore();
+
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw new Error('simulated rename failure');
+    });
+    expect(() => saveRooms()).toThrow(/failed to save room data/i);
+    expect(fs.readFileSync(file(), 'utf8')).toBe(previousSave);
+    rename.mockRestore();
   });
 });
