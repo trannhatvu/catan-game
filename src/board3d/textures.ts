@@ -99,7 +99,7 @@ export function portTexture(type: PortType): THREE.Texture {
   const inner =
     type === 'any'
       ? `<text x="128" y="132" text-anchor="middle" dominant-baseline="central" font-family="${SERIF}" font-weight="700" font-size="92" fill="#eedcb8">3:1</text>`
-      : `<svg x="58" y="36" width="140" height="140" viewBox="0 0 24 24" color="${PORT_COLOR[type]}">${renderToStaticMarkup(
+      : `<svg x="44" y="8" width="168" height="168" viewBox="0 0 24 24" color="${PORT_COLOR[type]}">${renderToStaticMarkup(
           createElement(ResourceGlyph, { resource: type }),
         )}</svg>
          <text x="128" y="206" text-anchor="middle" font-family="${SERIF}" font-weight="700" font-size="54" fill="${PORT_COLOR[type]}">2:1</text>`;

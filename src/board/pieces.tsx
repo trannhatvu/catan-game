@@ -368,7 +368,7 @@ export function PortMarker({
         </text>
       ) : (
         <g color={color}>
-          <svg x={dock.x - 13} y={dock.y - 16} width="26" height="26" viewBox="0 0 24 24">
+          <svg x={dock.x - 17} y={dock.y - 24} width="34" height="34" viewBox="0 0 24 24">
             <ResourceGlyph resource={type} />
           </svg>
           <text
