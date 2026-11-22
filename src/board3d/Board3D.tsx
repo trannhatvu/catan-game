@@ -31,21 +31,37 @@ const boardRadius = () => frameRadius() + 0.3;
  */
 function CameraRig({ controls }: { controls: React.RefObject<OrbitControlsImpl> }) {
   const { camera, size } = useThree();
+  const fitDistance = useRef<number | null>(null);
   useEffect(() => {
+    if (size.width <= 0 || size.height <= 0) return;
     const aspect = size.width / size.height;
     const half = Math.tan(((FOV / 2) * Math.PI) / 180);
-    // The tilt foreshortens the board's depth, so it can sit closer than a flat fit.
     const distance = (boardRadius() * 0.98) / (half * Math.min(1, aspect));
-    camera.position.set(0, distance * Math.cos(POLAR), distance * Math.sin(POLAR));
-    camera.lookAt(0, 0, 0.25);
     const c = controls.current;
-    if (c) {
-      c.target.set(0, 0, 0.25);
-      c.minDistance = distance * 0.45;
-      c.maxDistance = distance * 1.3;
+    if (!c) return;
+
+    c.minDistance = distance * 0.45;
+    c.maxDistance = distance * 1.3;
+    const center = new THREE.Vector3(0, 0, 0.25);
+    if (fitDistance.current === null) {
+      camera.position.set(center.x, center.y + distance * Math.cos(POLAR), center.z + distance * Math.sin(POLAR));
+      c.target.copy(center);
+      camera.lookAt(center);
       c.update();
       c.saveState();
+      fitDistance.current = distance;
+      return;
     }
+
+    const zoomRatio = camera.position.distanceTo(c.target) / fitDistance.current;
+    const nextDistance = THREE.MathUtils.clamp(distance * zoomRatio, c.minDistance, c.maxDistance);
+    const offset = camera.position.clone().sub(c.target);
+    if (offset.lengthSq() > 0) camera.position.copy(c.target).add(offset.setLength(nextDistance));
+    c.target0.copy(center);
+    c.position0.set(center.x, center.y + distance * Math.cos(POLAR), center.z + distance * Math.sin(POLAR));
+    c.zoom0 = camera.zoom;
+    c.update();
+    fitDistance.current = distance;
   }, [camera, size.width, size.height, controls]);
   return null;
 }
@@ -98,6 +114,20 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
   // Fog and shadows were tuned on the base island; stretch them for bigger ones.
   const scale = boardRadius() / 5.5;
   const colorOf = (id: string) => view.players.find((p) => p.id === id)?.color ?? '#888';
+  const clampPan = useCallback(() => {
+    const control = controls.current;
+    if (!control) return;
+    const limit = boardRadius() * 0.8;
+    const x = THREE.MathUtils.clamp(control.target.x, -limit, limit);
+    const z = THREE.MathUtils.clamp(control.target.z, -limit, limit);
+    const dx = x - control.target.x;
+    const dz = z - control.target.z;
+    if (dx === 0 && dz === 0) return;
+    control.target.x = x;
+    control.target.z = z;
+    control.object.position.x += dx;
+    control.object.position.z += dz;
+  }, []);
 
   const vertexSpots = pending === 'settlement' ? moves.settlementSpots : pending === 'city' ? moves.citySpots : [];
   const edgeSpots = pending === 'road' ? moves.roadSpots : [];
@@ -111,7 +141,7 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
   const delayFor = (key: string) => (atLoad.has(key) ? INTRO_DONE : 0);
 
   return (
-    <div className="board3d">
+    <div className="board3d" onContextMenu={(event) => event.preventDefault()}>
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -172,7 +202,8 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
         <OrbitControls
           ref={controls}
           makeDefault
-          enablePan={false}
+          enablePan
+          screenSpacePanning={false}
           enableDamping
           dampingFactor={0.08}
           minPolarAngle={0.15}
@@ -180,6 +211,16 @@ export default function Board3D({ view, pending, onVertex, onEdge, onHex, roll }
           minAzimuthAngle={-Math.PI / 4}
           maxAzimuthAngle={Math.PI / 4}
           rotateSpeed={0.6}
+          mouseButtons={{
+            LEFT: THREE.MOUSE.PAN,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.ROTATE,
+          }}
+          touches={{
+            ONE: THREE.TOUCH.PAN,
+            TWO: THREE.TOUCH.DOLLY_ROTATE,
+          }}
+          onChange={clampPan}
         />
         <CameraRig controls={controls} />
         <WinSwoop controls={controls} active={!!view.winner} />

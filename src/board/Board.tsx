@@ -11,6 +11,7 @@ import type { PlayerView } from '../../shared/redact';
 import { graphOf } from '../../shared/scenario';
 import type { Terrain } from '../../shared/types';
 import type { RollFx } from '../fx/events';
+import { useBoardViewport } from './useBoardViewport';
 import {
   CityPiece,
   HexTile,
@@ -127,6 +128,7 @@ function Sea() {
 }
 
 export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardProps) {
+  const viewport = useBoardViewport();
   const { board, moves } = view;
   const g = graphOf(board);
   const coast = useMemo(() => coastline(g), [g]);
@@ -228,18 +230,31 @@ export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardPro
    * paint, so it must not share a layer with anything that moves every frame.
    */
   return (
-    <div className="board2d">
-      <svg viewBox={box} aria-hidden="true">
-        <Sea />
-        {/* Surf against the frame: a wide pale stroke, mostly under the wood, breathing slowly. */}
-        <path className="foam" d={coast.path} fill="none" stroke="#e8f6ff" strokeWidth="58" strokeLinejoin="round" />
-        {harbours.map(({ port, info, outward }) => (
-          <PortBoat key={port.edge} pos={info.pos} outward={outward} type={port.type} />
-        ))}
-      </svg>
+     <div
+       ref={viewport.viewportRef}
+       className={`board2d-viewport${viewport.isDragging ? ' is-dragging' : ''}`}
+       onPointerDown={viewport.handlers.onPointerDown}
+       onPointerMove={viewport.handlers.onPointerMove}
+       onPointerUp={viewport.handlers.onPointerUp}
+       onPointerCancel={viewport.handlers.onPointerCancel}
+       onClickCapture={viewport.handlers.onClickCapture}
+     >
+       <div
+         ref={viewport.mapRef}
+         className="board2d"
+         style={{ transform: `translate3d(0, 0, 0) scale(1)` }}
+       >
+         <svg viewBox={box} aria-hidden="true">
+           <Sea />
+           {/* Surf against the frame: a wide pale stroke, mostly under the wood, breathing slowly. */}
+           <path className="foam" d={coast.path} fill="none" stroke="#e8f6ff" strokeWidth="58" strokeLinejoin="round" />
+           {harbours.map(({ port, info, outward }) => (
+             <PortBoat key={port.edge} pos={info.pos} outward={outward} type={port.type} />
+           ))}
+         </svg>
 
-      <svg viewBox={box} role="img" aria-label="Catan board">
-        <defs>
+         <svg viewBox={box} role="img" aria-label="Catan board">
+           <defs>
           {TERRAINS.map((t) => (
             <linearGradient key={t} id={`terrain-${t}`} x1="0.15" y1="0" x2="0.85" y2="1">
               <stop offset="0%" stopColor={TERRAIN_FILL[t][0]} />
@@ -385,12 +400,12 @@ export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardPro
               />
             ),
           )}
-        </g>
-      </svg>
+          </g>
+        </svg>
 
-      {/* Only legal spots are ever rendered, so a click can never be illegal. */}
-      <svg viewBox={box} className="board2d-spots">
-        {hexSpots.map((h) => {
+        {/* Only legal spots are ever rendered, so a click can never be illegal. */}
+        <svg viewBox={box} className="board2d-spots">
+          {hexSpots.map((h) => {
           const c = g.hexPos[h];
           return (
             // Outline only: the numbers are exactly what you are choosing between,
@@ -442,8 +457,18 @@ export function Board({ view, pending, onVertex, onEdge, onHex, roll }: BoardPro
               <circle className="spot-marker" cx={p.x} cy={p.y} r="8" fill="#ffd66e" stroke="#4a3208" strokeWidth="2" />
             </g>
           );
-        })}
-      </svg>
+          })}
+        </svg>
+      </div>
+      <button
+        className="board3d-reset"
+        type="button"
+        data-board-control
+        onClick={viewport.reset}
+        title="Reset view"
+      >
+        Reset view
+      </button>
     </div>
   );
 }

@@ -46,6 +46,12 @@ commands. For example, use `just dev`, `just test`, or
 `just test shared/__tests__/rules.test.ts`. `just deploy` builds and starts the
 production server locally; it does not deploy to a remote host.
 
+## Board navigation
+
+In 2D and 3D, drag with the primary mouse button or one finger to pan. In 2D,
+scroll or pinch to zoom; reset the view to fit the board again. In 3D, right
+mouse drag orbits, while a two-finger gesture orbits and zooms the camera.
+
 ## Sound effects
 
 Sound effects are off by default. In-game, open **Sound settings** to enable
