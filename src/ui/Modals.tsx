@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { PlayerView } from '../../shared/redact';
 import { RESOURCES, type Action, type DevCardType, type PlayerId, type Resource, type ResourceCounts } from '../../shared/types';
-import { RESOURCE_COLOR, RESOURCE_NAME, ResourceGlyph } from '../board/icons';
+import { RESOURCE_COLOR, ResourceGlyph } from '../board/icons';
+import { resourceName, useI18n, type Language, type TranslationKey } from '../i18n';
 import { emptyCounts, totalOf } from './HandBar';
 import { Confetti } from './Confetti';
 
@@ -26,6 +27,7 @@ function CountPicker({
   /** Off when `max` is just a cap rather than the player's actual hand. */
   showHeld?: boolean;
 }) {
+  const { language, t } = useI18n();
   const step = (r: Resource, delta: number) => {
     const next = { ...counts, [r]: Math.max(0, Math.min(max[r], counts[r] + delta)) };
     onChange(next);
@@ -39,19 +41,23 @@ function CountPicker({
             <ResourceGlyph resource={r} />
           </span>
           <div className="stepper">
-            <button onClick={() => step(r, -1)} disabled={counts[r] === 0} aria-label={`One less ${RESOURCE_NAME[r]}`}>
+            <button
+              onClick={() => step(r, -1)}
+              disabled={counts[r] === 0}
+              aria-label={t('oneLessResource', { resource: resourceName(language, r) })}
+            >
               −
             </button>
             <span>{counts[r]}</span>
             <button
               onClick={() => step(r, 1)}
               disabled={counts[r] >= max[r]}
-              aria-label={`One more ${RESOURCE_NAME[r]}`}
+              aria-label={t('oneMoreResource', { resource: resourceName(language, r) })}
             >
               +
             </button>
           </div>
-          {showHeld && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{max[r]} held</span>}
+          {showHeld && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{t('heldCount', { count: max[r] })}</span>}
         </div>
       ))}
     </div>
@@ -59,6 +65,7 @@ function CountPicker({
 }
 
 export function DiscardModal({ view, send }: { view: PlayerView; send: (a: Action) => void }) {
+  const { t } = useI18n();
   const owed = view.moves.mustDiscard;
   const held = view.you?.resources ?? emptyCounts();
   const [picked, setPicked] = useState<ResourceCounts>(emptyCounts);
@@ -68,14 +75,14 @@ export function DiscardModal({ view, send }: { view: PlayerView; send: (a: Actio
 
   return (
     <Scrim>
-      <h2>The robber takes his cut</h2>
+      <h2>{t('robberTakesCut')}</h2>
       <p className="modal-lede">
-        You are holding {totalOf(held)} cards, so {owed} of them go back to the bank. Pick which.
+        {t('discardExplanation', { held: totalOf(held), count: owed })}
       </p>
       <CountPicker counts={picked} max={held} onChange={setPicked} />
       <div className="modal-actions">
         <span style={{ marginRight: 'auto', color: chosen === owed ? 'var(--good)' : 'var(--text-dim)', fontSize: 14 }}>
-          {chosen} of {owed} chosen
+          {t('chosenCount', { chosen, count: owed })}
         </span>
         <button
           className="btn btn-primary"
@@ -85,7 +92,7 @@ export function DiscardModal({ view, send }: { view: PlayerView; send: (a: Actio
             setPicked(emptyCounts());
           }}
         >
-          Discard
+          {t('discard')}
         </button>
       </div>
     </Scrim>
@@ -93,13 +100,14 @@ export function DiscardModal({ view, send }: { view: PlayerView; send: (a: Actio
 }
 
 export function StealModal({ view, send }: { view: PlayerView; send: (a: Action) => void }) {
+  const { t } = useI18n();
   const targets = view.moves.stealTargets;
   if (view.phase !== 'stealing' || targets.length === 0) return null;
 
   return (
     <Scrim>
-      <h2>Take a card</h2>
-      <p className="modal-lede">The robber lets you take one card, unseen, from a player on that hex.</p>
+      <h2>{t('takeCard')}</h2>
+      <p className="modal-lede">{t('robberStealExplanation')}</p>
       <div className="responses">
         {targets.map((id) => {
           const p = view.players.find((x) => x.id === id)!;
@@ -107,7 +115,7 @@ export function StealModal({ view, send }: { view: PlayerView; send: (a: Action)
             <button key={id} className="response" onClick={() => send({ type: 'steal', target: id })}>
               <span className="turn-dot" style={{ ['--turn-color' as string]: p.color }} />
               <span>{p.name}</span>
-              <span className="response-state">{p.handSize} cards</span>
+              <span className="response-state">{t('playerCards', { count: p.handSize })}</span>
             </button>
           );
         })}
@@ -116,12 +124,12 @@ export function StealModal({ view, send }: { view: PlayerView; send: (a: Action)
   );
 }
 
-const DEV_CARD_COPY: Record<DevCardType, { title: string; text: string }> = {
-  knight: { title: 'Knight', text: 'Move the robber and take a card from someone on that hex.' },
-  roadBuilding: { title: 'Road Building', text: 'Build two roads for free.' },
-  yearOfPlenty: { title: 'Year of Plenty', text: 'Take any two resources from the bank.' },
-  monopoly: { title: 'Monopoly', text: 'Name a resource; every other player hands you all of theirs.' },
-  victoryPoint: { title: 'Victory Point', text: 'Worth one point. Stays hidden until someone wins.' },
+const DEV_CARD_COPY: Record<DevCardType, { title: TranslationKey; text: TranslationKey }> = {
+  knight: { title: 'knight', text: 'knightDescription' },
+  roadBuilding: { title: 'roadBuilding', text: 'roadBuildingDescription' },
+  yearOfPlenty: { title: 'yearOfPlenty', text: 'yearOfPlentyDescription' },
+  monopoly: { title: 'monopoly', text: 'monopolyDescription' },
+  victoryPoint: { title: 'victoryPointCard', text: 'victoryPointDescription' },
 };
 
 export function DevCardModal({
@@ -133,6 +141,7 @@ export function DevCardModal({
   send: (a: Action) => void;
   onClose: () => void;
 }) {
+  const { language, t } = useI18n();
   const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
   const [picks, setPicks] = useState<Resource[]>([]);
   const cards = (view.you?.devCards ?? []).filter((c) => !c.played);
@@ -153,8 +162,8 @@ export function DevCardModal({
   if (choosing === 'monopoly') {
     return (
       <Scrim>
-        <h2>Monopoly</h2>
-        <p className="modal-lede">Every other player hands you all of this resource.</p>
+        <h2>{t('monopoly')}</h2>
+        <p className="modal-lede">{t('monopolyExplanation')}</p>
         <div className="picker">
           {RESOURCES.map((r) => (
             <button
@@ -166,13 +175,13 @@ export function DevCardModal({
               <span style={{ color: RESOURCE_COLOR[r] }}>
                 <ResourceGlyph resource={r} />
               </span>
-              <span style={{ fontSize: 12 }}>{RESOURCE_NAME[r]}</span>
+              <span style={{ fontSize: 12 }}>{resourceName(language, r)}</span>
             </button>
           ))}
         </div>
         <div className="modal-actions">
           <button className="btn" onClick={() => setChoosing(null)}>
-            Back
+            {t('back')}
           </button>
           <button
             className="btn btn-primary"
@@ -182,7 +191,7 @@ export function DevCardModal({
               onClose();
             }}
           >
-            Take them
+            {t('takeThem')}
           </button>
         </div>
       </Scrim>
@@ -192,8 +201,8 @@ export function DevCardModal({
   if (choosing === 'yearOfPlenty') {
     return (
       <Scrim>
-        <h2>Year of Plenty</h2>
-        <p className="modal-lede">Take any two resources from the bank. You can take two of the same.</p>
+        <h2>{t('yearOfPlenty')}</h2>
+        <p className="modal-lede">{t('yearOfPlentyExplanation')}</p>
         <div className="picker">
           {RESOURCES.map((r) => (
             <button
@@ -206,19 +215,23 @@ export function DevCardModal({
               <span style={{ color: RESOURCE_COLOR[r] }}>
                 <ResourceGlyph resource={r} />
               </span>
-              <span style={{ fontSize: 12 }}>{RESOURCE_NAME[r]}</span>
+              <span style={{ fontSize: 12 }}>{resourceName(language, r)}</span>
             </button>
           ))}
         </div>
         <p className="modal-lede">
-          Chosen: {picks.length ? picks.map((r) => RESOURCE_NAME[r]).join(' and ') : 'nothing yet'}
+          {t('chosenResources', {
+            resources: picks.length
+              ? picks.map((resource) => resourceName(language, resource)).join(language === 'vi' ? ' và ' : ' and ')
+              : t('nothingYet'),
+          })}
         </p>
         <div className="modal-actions">
           <button className="btn" onClick={() => setPicks([])}>
-            Clear
+            {t('clear')}
           </button>
           <button className="btn" onClick={() => setChoosing(null)}>
-            Back
+            {t('back')}
           </button>
           <button
             className="btn btn-primary"
@@ -228,7 +241,7 @@ export function DevCardModal({
               onClose();
             }}
           >
-            Take them
+            {t('takeThem')}
           </button>
         </div>
       </Scrim>
@@ -237,17 +250,17 @@ export function DevCardModal({
 
   return (
     <Scrim>
-      <h2>Your development cards</h2>
-      <p className="modal-lede">One card per turn, and never on the turn you bought it.</p>
+      <h2>{t('yourDevelopmentCards')}</h2>
+      <p className="modal-lede">{t('oneCardPerTurn')}</p>
       <div className="dev-list">
-        {cards.length === 0 && <p className="log-empty">You have no cards yet.</p>}
+        {cards.length === 0 && <p className="log-empty">{t('noCardsYet')}</p>}
         {cards.map((card, i) => {
           const copy = DEV_CARD_COPY[card.type];
           return (
             <div key={i} className="dev-card" data-playable={card.playable}>
               <div>
-                <h3>{copy.title}</h3>
-                <p>{copy.text}</p>
+                <h3>{t(copy.title)}</h3>
+                <p>{t(copy.text)}</p>
               </div>
               {card.type !== 'victoryPoint' && (
                 <button
@@ -255,7 +268,7 @@ export function DevCardModal({
                   disabled={!card.playable || !view.moves.playableDevCards.includes(card.type)}
                   onClick={() => play(card.type)}
                 >
-                  Play
+                  {t('play')}
                 </button>
               )}
             </div>
@@ -264,7 +277,7 @@ export function DevCardModal({
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>
-          Close
+          {t('close')}
         </button>
       </div>
     </Scrim>
@@ -280,6 +293,7 @@ export function TradeModal({
   send: (a: Action) => void;
   onClose: () => void;
 }) {
+  const { language, t } = useI18n();
   const held = view.you?.resources ?? emptyCounts();
   const [give, setGive] = useState<ResourceCounts>(emptyCounts);
   const [want, setWant] = useState<ResourceCounts>(emptyCounts);
@@ -291,9 +305,9 @@ export function TradeModal({
   if (offer && mine) {
     return (
       <Scrim>
-        <h2>Offer on the table</h2>
+        <h2>{t('offerOnTable')}</h2>
         <p className="modal-lede">
-          You give {describe(offer.give)} for {describe(offer.want)}.
+          {t('youGiveFor', { give: describe(offer.give, language), want: describe(offer.want, language) })}
         </p>
         <div className="responses">
           {view.players
@@ -306,12 +320,12 @@ export function TradeModal({
                   <span>{p.name}</span>
                   <span className="response-state" data-state={state}>
                     {state === 'accept'
-                      ? 'accepted'
+                      ? t('accepted')
                       : state === 'reject'
-                        ? 'declined'
+                        ? t('declined')
                         : state === 'counter'
-                          ? 'countered'
-                          : 'thinking…'}
+                          ? t('countered')
+                          : t('thinking')}
                   </span>
                   {state === 'accept' && (
                     <button
@@ -322,7 +336,7 @@ export function TradeModal({
                         onClose();
                       }}
                     >
-                      Trade
+                      {t('trade')}
                     </button>
                   )}
                 </div>
@@ -331,13 +345,18 @@ export function TradeModal({
         </div>
         {offer.counter && (
           <div style={{ marginTop: 18 }}>
-            <h3 style={{ fontSize: 15 }}>Counteroffer from {view.players.find((p) => p.id === offer.counter!.from)?.name}</h3>
+            <h3 style={{ fontSize: 15 }}>
+              {t('counterofferFrom', { name: view.players.find((p) => p.id === offer.counter!.from)?.name ?? '' })}
+            </h3>
             <p className="modal-lede">
-              They give {describe(offer.counter.give)} and want {describe(offer.counter.want)}.
+              {t('theyGiveWant', {
+                give: describe(offer.counter.give, language),
+                want: describe(offer.counter.want, language),
+              })}
             </p>
             <div className="modal-actions">
               <button className="btn" onClick={() => send({ type: 'respondCounterTrade', accept: false })}>
-                Decline counter
+                {t('declineCounter')}
               </button>
               <button
                 className="btn btn-primary"
@@ -347,10 +366,10 @@ export function TradeModal({
                   onClose();
                 }}
               >
-                Accept counter
+                {t('acceptCounter')}
               </button>
             </div>
-            {!view.moves.canAcceptCounter && <p className="log-empty">You no longer hold the requested cards.</p>}
+            {!view.moves.canAcceptCounter && <p className="log-empty">{t('requestedCardsUnavailable')}</p>}
           </div>
         )}
         <div className="modal-actions">
@@ -361,7 +380,7 @@ export function TradeModal({
               onClose();
             }}
           >
-            Withdraw offer
+            {t('withdrawOffer')}
           </button>
         </div>
       </Scrim>
@@ -372,38 +391,38 @@ export function TradeModal({
 
   return (
     <Scrim>
-      <h2>Trade</h2>
-      <p className="modal-lede">Offer a swap to the table, or trade straight with the bank.</p>
+      <h2>{t('trade')}</h2>
+      <p className="modal-lede">{t('tradeExplanation')}</p>
 
       <div className="trade-sides">
         <div className="trade-side">
-          <h3>You give</h3>
+          <h3>{t('youGive')}</h3>
           <CountPicker counts={give} max={held} onChange={setGive} />
         </div>
-        <div className="trade-swap">↓ in exchange for ↓</div>
+        <div className="trade-swap">{t('inExchangeFor')}</div>
         <div className="trade-side">
-          <h3>You want</h3>
+          <h3>{t('youWant')}</h3>
           <CountPicker counts={want} max={view.moves.tradeWantMax} onChange={setWant} showHeld={false} />
         </div>
       </div>
 
       <div className="modal-actions" style={{ marginBottom: 22 }}>
         <button className="btn" onClick={onClose}>
-          Cancel
+          {t('cancel')}
         </button>
         <button
           className="btn btn-primary"
           disabled={totalOf(give) === 0 || totalOf(want) === 0 || !view.moves.canOfferTrade}
           onClick={() => send({ type: 'offerTrade', give, want })}
         >
-          Offer it
+          {t('offerIt')}
         </button>
       </div>
 
-      <h3 style={{ fontSize: 15, marginBottom: 8 }}>Bank and harbours</h3>
+      <h3 style={{ fontSize: 15, marginBottom: 8 }}>{t('bankAndHarbours')}</h3>
       {bankable.length === 0 ? (
         <p className="log-empty">
-          You need {Math.min(...RESOURCES.map((r) => view.moves.bankRates[r]))} of one resource to trade with the bank.
+          {t('needResourcesForBank', { count: Math.min(...RESOURCES.map((r) => view.moves.bankRates[r])) })}
         </p>
       ) : (
         <div className="responses">
@@ -413,7 +432,7 @@ export function TradeModal({
                 <ResourceGlyph resource={from} />
               </span>
               <span>
-                {view.moves.bankRates[from]} {RESOURCE_NAME[from].toLowerCase()} for
+                {t('bankRateForOne', { count: view.moves.bankRates[from], resource: resourceName(language, from).toLowerCase() })}
               </span>
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {RESOURCES.filter((to) => to !== from).map((to) => (
@@ -421,7 +440,7 @@ export function TradeModal({
                     key={to}
                     className="btn"
                     style={{ padding: '4px 8px' }}
-                    title={`Trade for ${RESOURCE_NAME[to].toLowerCase()}`}
+                    title={t('tradeFor', { resource: resourceName(language, to).toLowerCase() })}
                     onClick={() => send({ type: 'bankTrade', give: from, want: to })}
                   >
                     <span style={{ color: RESOURCE_COLOR[to], width: 18, height: 18, display: 'block' }}>
@@ -440,6 +459,7 @@ export function TradeModal({
 
 /** Shown to everyone who is not the offering player. */
 export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Action) => void }) {
+  const { language, t } = useI18n();
   const [countering, setCountering] = useState(false);
   const [give, setGive] = useState<ResourceCounts>(emptyCounts);
   const [want, setWant] = useState<ResourceCounts>(emptyCounts);
@@ -448,8 +468,10 @@ export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Ac
   if (offer.counter?.from === view.you?.id) {
     return (
       <Scrim>
-        <h2>Counteroffer sent</h2>
-        <p className="modal-lede">Your counteroffer is waiting for {view.players.find((p) => p.id === offer.from)?.name}.</p>
+        <h2>{t('counterofferSent')}</h2>
+        <p className="modal-lede">
+          {t('counterofferWaiting', { name: view.players.find((p) => p.id === offer.from)?.name ?? '' })}
+        </p>
       </Scrim>
     );
   }
@@ -459,30 +481,30 @@ export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Ac
 
   return (
     <Scrim>
-      <h2>{from?.name} wants to trade</h2>
+      <h2>{t('playerWantsToTrade', { name: from?.name ?? '' })}</h2>
       <p className="modal-lede">
-        They give {describe(offer.give)} and want {describe(offer.want)} back.
+        {t('theyWantBack', { give: describe(offer.give, language), want: describe(offer.want, language) })}
       </p>
       {countering ? (
         <>
           <div className="trade-sides">
             <div className="trade-side">
-              <h3>You give</h3>
+              <h3>{t('youGive')}</h3>
               <CountPicker counts={give} max={view.you?.resources ?? emptyCounts()} onChange={setGive} />
             </div>
-            <div className="trade-swap">in exchange for</div>
+            <div className="trade-swap">{t('inExchangeForText')}</div>
             <div className="trade-side">
-              <h3>You want</h3>
+              <h3>{t('youWant')}</h3>
               <CountPicker counts={want} max={view.moves.counterWantMax} onChange={setWant} showHeld={false} />
             </div>
           </div>
-          {overlaps && <p className="log-empty">Give and request different resource types.</p>}
+          {overlaps && <p className="log-empty">{t('differentResourceTypes')}</p>}
           <div className="modal-actions">
             <button className="btn" onClick={() => setCountering(false)}>
-              Back
+              {t('back')}
             </button>
             <button className="btn" onClick={() => send({ type: 'respondTrade', accept: false })}>
-              No thanks
+              {t('noThanks')}
             </button>
             <button
               className="btn btn-primary"
@@ -499,33 +521,33 @@ export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Ac
                 setWant(emptyCounts());
               }}
             >
-              Send counter
+              {t('sendCounter')}
             </button>
           </div>
         </>
       ) : (
         <>
-          {offer.counter && <p className="log-empty">Another player has a counteroffer waiting for a response.</p>}
+          {offer.counter && <p className="log-empty">{t('anotherCounterofferWaiting')}</p>}
           <div className="modal-actions">
             <button className="btn" onClick={() => send({ type: 'respondTrade', accept: false })}>
-              No thanks
+              {t('noThanks')}
             </button>
             <button
               className="btn btn-primary"
               disabled={!view.moves.canAcceptTrade}
               onClick={() => send({ type: 'respondTrade', accept: true })}
             >
-              Accept
+              {t('accept')}
             </button>
             <button
               className="btn"
               disabled={!view.moves.canCounterTrade}
               onClick={() => setCountering(true)}
             >
-              Counteroffer
+              {t('counteroffer')}
             </button>
           </div>
-          {!view.moves.canAcceptTrade && <p className="log-empty">You do not hold what they want.</p>}
+          {!view.moves.canAcceptTrade && <p className="log-empty">{t('doNotHoldWanted')}</p>}
         </>
       )}
     </Scrim>
@@ -536,6 +558,7 @@ export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Ac
 const WINNER_DELAY_MS = 2600;
 
 export function WinnerModal({ view, onLeave }: { view: PlayerView; onLeave: () => void }) {
+  const { t } = useI18n();
   const [shown, setShown] = useState(false);
   useEffect(() => {
     if (!view.winner) return setShown(false);
@@ -557,8 +580,8 @@ export function WinnerModal({ view, onLeave }: { view: PlayerView; onLeave: () =
       {shown && (
         <Scrim>
           <div className="winner">
-            <div className="wordmark">{winner?.name} wins</div>
-            <p className="modal-lede">Ten victory points. The island is settled.</p>
+            <div className="wordmark">{t('playerWins', { name: winner?.name ?? '' })}</div>
+            <p className="modal-lede">{t('tenPointsIslandSettled')}</p>
             <ul className="scoreboard">
               {ranked.map((p) => (
                 <li key={p.id} style={{ ['--player-color' as string]: p.color }}>
@@ -568,7 +591,7 @@ export function WinnerModal({ view, onLeave }: { view: PlayerView; onLeave: () =
               ))}
             </ul>
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={onLeave}>
-              Back to the start
+              {t('backToStart')}
             </button>
           </div>
         </Scrim>
@@ -577,9 +600,13 @@ export function WinnerModal({ view, onLeave }: { view: PlayerView; onLeave: () =
   );
 }
 
-function describe(counts: ResourceCounts): string {
-  const parts = RESOURCES.filter((r) => counts[r] > 0).map((r) => `${counts[r]} ${RESOURCE_NAME[r].toLowerCase()}`);
-  return parts.length ? parts.join(' and ') : 'nothing';
+function describe(counts: ResourceCounts, language: Language): string {
+  const parts = RESOURCES.filter((r) => counts[r] > 0).map((r) => `${counts[r]} ${resourceName(language, r).toLowerCase()}`);
+  return parts.length ? parts.join(language === 'vi' ? ' và ' : ' and ') : translateNothing(language);
+}
+
+function translateNothing(language: Language): string {
+  return language === 'vi' ? 'không có tài nguyên' : 'nothing';
 }
 
 /** Close a modal on Escape — expected of anything that covers the board. */

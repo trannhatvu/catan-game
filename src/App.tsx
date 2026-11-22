@@ -13,6 +13,8 @@ import type { PlayerView } from '../shared/redact';
 import { musicSceneFor } from './audio/music';
 import { useBackgroundMusic } from './audio/useMusic';
 import { useSound } from './audio/useSound';
+import { useI18n, translateServerMessage } from './i18n';
+import { LanguageControl } from './ui/LanguageControl';
 import {
   DevCardModal,
   DiscardModal,
@@ -47,6 +49,7 @@ function Game({
   const sound = useSound();
   const roll = useRoll(view);
   const previousSoundView = useRef<PlayerView | null>(null);
+  const { language, t } = useI18n();
 
   useEffect(() => {
     const cues = detectSoundCues(previousSoundView.current, view);
@@ -103,14 +106,14 @@ function Game({
         <div className="wordmark">
           Cat<span>a</span>n
         </div>
-        <button className="mode-toggle" onClick={api.leave} title="Back to the main menu; you can resume this game from there">
-          Menu
+        <button className="mode-toggle" onClick={api.leave} title={t('backToMainMenuHint')}>
+          {t('menu')}
         </button>
                 <span className="room-code">{api.room!.code}</span>
-        {!api.connected && <span className="room-code">reconnecting…</span>}
+        {!api.connected && <span className="room-code">{t('reconnecting')}</span>}
         {boardMode.canToggle && (
-          <button className="mode-toggle" onClick={boardMode.toggle} title="Switch board view">
-            {boardMode.is3d ? '2D view' : '3D view'}
+          <button className="mode-toggle" onClick={boardMode.toggle} title={t('switchBoardView')}>
+            {boardMode.is3d ? t('view2d') : t('view3d')}
           </button>
         )}
         <SoundControl
@@ -125,17 +128,18 @@ function Game({
           onToggle={() => void music.toggleEnabled()}
           onVolumeChange={music.setVolume}
         />
+        <LanguageControl compact />
         <div className="turn-banner" data-mine={view.moves.isMyTurn && !view.winner}>
           <span className="turn-dot" style={{ ['--turn-color' as string]: current?.color ?? 'transparent' }} />
           {view.winner
-            ? 'Game over'
+            ? t('gameOver')
             : view.phase === 'initiative'
               ? view.moves.isMyTurn
-                ? 'Your roll'
-                : `${current?.name ?? 'Someone'} is rolling`
+                ? t('yourRoll')
+                : t('playerRolling', { name: current?.name ?? t('playerFallback') })
               : view.moves.isMyTurn
-                ? 'Your turn'
-                : `${current?.name ?? 'Someone'}’s turn`}
+                ? t('yourTurn')
+                : t('playerTurn', { name: current?.name ?? t('playerFallback') })}
         </div>
       </header>
 
@@ -188,7 +192,7 @@ function Game({
 
       {api.error && (
         <div className="toast" role="status" onClick={api.dismissError}>
-          {api.error}
+          {translateServerMessage(api.error, language)}
         </div>
       )}
     </div>

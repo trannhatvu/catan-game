@@ -1,6 +1,7 @@
 import type { PlayerView } from '../../shared/redact';
 import { BUILD_COSTS, RESOURCES, type Resource, type ResourceCounts } from '../../shared/types';
-import { RESOURCE_COLOR, RESOURCE_NAME, ResourceGlyph } from '../board/icons';
+import { RESOURCE_COLOR, ResourceGlyph } from '../board/icons';
+import { resourceName, useI18n, type Translator } from '../i18n';
 
 export type Pending = 'settlement' | 'city' | 'road' | 'robber' | null;
 
@@ -51,8 +52,9 @@ const PIP_LAYOUT: Record<number, [number, number][]> = {
 };
 
 function Die({ value }: { value: number }) {
+  const { t } = useI18n();
   return (
-    <div className="die" data-rolling="true" key={value} aria-label={`Die showing ${value}`}>
+    <div className="die" data-rolling="true" key={value} aria-label={t('dieShowing', { value })}>
       {(PIP_LAYOUT[value] ?? []).map(([row, col], i) => (
         <span key={i} className="pip" style={{ gridRow: row, gridColumn: col }} />
       ))}
@@ -61,6 +63,7 @@ function Die({ value }: { value: number }) {
 }
 
 export function Cards({ resources }: { resources: ResourceCounts }) {
+  const { language } = useI18n();
   return (
     <div className="cards">
       {RESOURCES.map((r) => (
@@ -70,7 +73,7 @@ export function Cards({ resources }: { resources: ResourceCounts }) {
           data-resource={r}
           style={{ ['--card-color' as string]: RESOURCE_COLOR[r] }}
           data-empty={resources[r] === 0}
-          title={`${RESOURCE_NAME[r]}: ${resources[r]}`}
+          title={`${resourceName(language, r)}: ${resources[r]}`}
         >
           <ResourceGlyph resource={r} />
           {/* Keyed on the count so a change remounts the chip and it pops. */}
@@ -131,33 +134,33 @@ function BuildButton({
 }
 
 /** One line telling the player exactly what the game is waiting on. */
-function prompt(view: PlayerView, owed: number): string | null {
+function prompt(view: PlayerView, owed: number, t: Translator): string | null {
   if (view.winner) return null;
-  if (owed > 0) return `Discard ${owed} ${owed === 1 ? 'card' : 'cards'}.`;
-  if (view.moves.mustAnswerCounter) return 'Answer the counteroffer.';
-  if (view.trade?.counter?.from === view.you?.id) return 'Waiting for the counteroffer response.';
+  if (owed > 0) return t('discardCards', { count: owed });
+  if (view.moves.mustAnswerCounter) return t('answerCounteroffer');
+  if (view.trade?.counter?.from === view.you?.id) return t('waitingCounterofferResponse');
   if (!view.moves.isMyTurn) {
-    if (view.moves.mustAnswerTrade) return 'Answer the trade offer.';
+    if (view.moves.mustAnswerTrade) return t('answerTradeOffer');
     const who = view.players.find((p) => p.id === view.currentPlayerId);
-    return who ? `${who.name} is playing.` : null;
+    return who ? t('playerIsPlaying', { name: who.name }) : null;
   }
   switch (view.phase) {
     case 'initiative':
-      return 'Roll the dice to choose the first player.';
+      return t('rollToChooseFirst');
     case 'setup':
       return view.setup?.placing === 'settlement'
-        ? 'Place a settlement on any free corner.'
-        : 'Place a road next to it.';
+        ? t('placeSettlement')
+        : t('placeRoadNextToIt');
     case 'rolling':
-      return 'Roll to start your turn.';
+      return t('rollToStartTurn');
     case 'movingRobber':
-      return 'Move the robber to a new hex.';
+      return t('moveRobberToHex');
     case 'stealing':
-      return 'Choose who to steal from.';
+      return t('chooseWhoToStealFrom');
     case 'discarding':
-      return 'Waiting for everyone to discard.';
+      return t('waitingForEveryoneToDiscard');
     default:
-      return view.freeRoads > 0 ? `Place ${view.freeRoads} free ${view.freeRoads === 1 ? 'road' : 'roads'}.` : null;
+      return view.freeRoads > 0 ? t('placeFreeRoads', { count: view.freeRoads }) : null;
   }
 }
 
@@ -184,9 +187,10 @@ export function HandBar({
   openTrade,
   openCards,
 }: HandBarProps) {
+  const { t } = useI18n();
   const { moves } = view;
   const owed = moves.mustDiscard;
-  const hint = prompt(view, owed);
+  const hint = prompt(view, owed, t);
   const myTurn = moves.isMyTurn;
   const inMain = view.phase === 'main' && myTurn;
 
@@ -201,15 +205,15 @@ export function HandBar({
       {hint && <p className="prompt">{hint}</p>}
 
       {view.phase === 'initiative' && view.initiative && (
-        <div className="responses" aria-label="First-player rolls">
+        <div className="responses" aria-label={t('firstPlayerRolls')}>
           {view.initiative.eligible.map((id) => {
             const player = view.players.find((p) => p.id === id);
             const score = view.initiative!.rolls[id];
             return (
               <div className="response" key={id}>
                 <span className="turn-dot" style={{ ['--turn-color' as string]: player?.color ?? 'transparent' }} />
-                <span>{player?.name ?? 'Player'}</span>
-                <span className="response-state">{score === undefined ? 'waiting to roll' : `rolled ${score}`}</span>
+                <span>{player?.name ?? t('playerFallback')}</span>
+                <span className="response-state">{score === undefined ? t('waitingToRoll') : t('rolledScore', { score })}</span>
               </div>
             );
           })}
@@ -219,41 +223,41 @@ export function HandBar({
       <div className="actions">
         {moves.canRollForStart && (
           <button className="btn btn-primary" onClick={onRollForStart}>
-            Roll for first player
+            {t('rollForFirstPlayer')}
           </button>
         )}
 
         {myTurn && view.phase === 'rolling' && (
           <button className="btn btn-primary" onClick={onRoll}>
-            Roll the dice
+            {t('rollDice')}
           </button>
         )}
 
         {inMain && (
           <>
             <BuildButton
-              label="Road"
+              label={t('road')}
               cost={BUILD_COSTS.road}
               active={pending === 'road'}
               disabled={moves.roadSpots.length === 0}
               onClick={() => toggle('road')}
             />
             <BuildButton
-              label="Settlement"
+              label={t('settlement')}
               cost={BUILD_COSTS.settlement}
               active={pending === 'settlement'}
               disabled={moves.settlementSpots.length === 0}
               onClick={() => toggle('settlement')}
             />
             <BuildButton
-              label="City"
+              label={t('city')}
               cost={BUILD_COSTS.city}
               active={pending === 'city'}
               disabled={moves.citySpots.length === 0}
               onClick={() => toggle('city')}
             />
             <BuildButton
-              label="Buy card"
+              label={t('buyCard')}
               cost={BUILD_COSTS.devCard}
               active={false}
               disabled={!moves.canBuyDevCard}
@@ -264,19 +268,19 @@ export function HandBar({
 
         {myTurn && (view.phase === 'main' || view.phase === 'rolling') && (
           <button className="btn" onClick={openCards} disabled={(view.you?.devCards.length ?? 0) === 0}>
-            Your cards ({view.you?.devCards.filter((c) => !c.played).length ?? 0})
+            {t('yourCards', { count: view.you?.devCards.filter((c) => !c.played).length ?? 0 })}
           </button>
         )}
 
         {inMain && (
           <button className="btn" onClick={openTrade}>
-            Trade
+            {t('trade')}
           </button>
         )}
 
         {inMain && (
           <button className="btn btn-primary" onClick={onEndTurn}>
-            End turn
+            {t('endTurn')}
           </button>
         )}
       </div>

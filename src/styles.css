@@ -558,6 +558,45 @@ h3 {
   font-size: 13px;
 }
 
+.language-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-line);
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.language-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.language-control select {
+  padding: 6px 10px;
+  color: var(--text);
+  background: var(--panel-well);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.language-control-compact select {
+  padding: 6px 10px;
+  color: var(--text-dim);
+  background: var(--panel-raised);
+  border-radius: 100px;
+  font-size: 13px;
+}
+
+.language-control select:focus {
+  border-color: var(--brass);
+  outline: none;
+}
+
 .board3d-reset {
   position: absolute;
   right: 14px;
@@ -1463,6 +1502,11 @@ h3 {
 /* ------------------------------------------------------------- responsive */
 
 @media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .game {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto auto;

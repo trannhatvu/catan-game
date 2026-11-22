@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { HEX_SIZE, type HexId, type Point } from '../../shared/layout';
 import type { PortType, Terrain } from '../../shared/types';
+import { resourceName, useI18n } from '../i18n';
 import { ResourceGlyph } from './icons';
 import { TerrainArt } from './terrain';
 
@@ -122,6 +123,7 @@ const robberAt = (c: Point): Point => ({ x: c.x - 26, y: c.y + 10 });
 
 /** `centres` is every hex's centre, so the hop can start from wherever it was. */
 export function Robber({ hex, centres }: { hex: HexId; centres: Record<HexId, Point> }) {
+  const { t } = useI18n();
   const at = robberAt(centres[hex]);
   const hop = useRef<SVGGElement>(null);
   const was = useRef(hex);
@@ -148,7 +150,7 @@ export function Robber({ hex, centres }: { hex: HexId; centres: Record<HexId, Po
   const body =
     'M0,-25 c6,0 9.8,4.3 9.8,9.2 0,2.8 -1.3,5 -3.3,6.5 5,2.8 8.3,8.3 9.2,14.7 h-31.4 c0.9,-6.4 4.2,-11.9 9.2,-14.7 -2,-1.5 -3.3,-3.7 -3.3,-6.5 0,-4.9 3.8,-9.2 9.8,-9.2 z';
   return (
-    <g className="robber-piece" transform={`translate(${at.x},${at.y})`} pointerEvents="none" aria-label="Robber">
+    <g className="robber-piece" transform={`translate(${at.x},${at.y})`} pointerEvents="none" aria-label={t('robber')}>
       <g ref={hop}>
         <ellipse cx="7" cy="21" rx="16" ry="5" fill="rgba(20,12,4,0.5)" />
         <path d={body} fill="#2a2d33" />
@@ -329,6 +331,7 @@ export function PortMarker({
   type: PortType;
   vertices: [Point, Point];
 }) {
+  const { language, t } = useI18n();
   const { out } = portOffset(pos, outward);
   const fork = out(18);
   const dock = out(54);
@@ -337,7 +340,11 @@ export function PortMarker({
 
   return (
     <g pointerEvents="none">
-      <title>{generic ? 'Harbour: trade any 3 alike for 1' : `Harbour: trade 2 ${type} for 1`}</title>
+      <title>
+        {generic
+          ? t('genericHarbourTooltip')
+          : t('specificHarbourTooltip', { resource: resourceName(language, type) })}
+      </title>
       <Plank a={vertices[0]} b={fork} width={5} />
       <Plank a={vertices[1]} b={fork} width={5} />
       <Plank a={fork} b={dock} width={9} />

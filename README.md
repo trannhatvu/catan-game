@@ -10,6 +10,7 @@ that enforces every rule.
   rerolls, snake draft, robber, trades and counteroffers, development cards,
   longest road, largest army and ten points to win
 - Optional Kenney CC0 sound effects with saved mute and volume controls
+- English and Vietnamese interface, with the language saved in your browser
 - Real-time multiplayer over Socket.IO with four-letter room codes
 - 3D board (three.js / react-three-fiber) with a 2D SVG fallback, switchable in-game
 - Reconnect by token: refresh or drop and you keep your seat and hand
@@ -51,6 +52,12 @@ production server locally; it does not deploy to a remote host.
 In 2D and 3D, drag with the primary mouse button or one finger to pan. In 2D,
 scroll or pinch to zoom; reset the view to fit the board again. In 3D, right
 mouse drag orbits, while a two-finger gesture orbits and zooms the camera.
+
+## Languages
+
+Choose English or Tiếng Việt from the main menu, lobby, or in-game top bar.
+The selection is saved in this browser. Vietnamese Catan terms follow the
+[Play Plus Catan guide](https://playplus.vn/blogs/news/huong-dan-choi-board-game-catan).
 
 ## Sound effects
 
