@@ -89,6 +89,7 @@ export type Player = {
  */
 export type Phase =
   | 'lobby'
+  | 'initiative'
   | 'setup'
   | 'rolling'
   | 'discarding'
@@ -97,11 +98,20 @@ export type Phase =
   | 'main'
   | 'finished';
 
+export type TradeResponse = 'pending' | 'accept' | 'reject' | 'counter';
+
+export type TradeCounteroffer = {
+  from: PlayerId;
+  give: ResourceCounts;
+  want: ResourceCounts;
+};
+
 export type TradeOffer = {
   from: PlayerId;
   give: ResourceCounts;
   want: ResourceCounts;
-  responses: Record<PlayerId, 'pending' | 'accept' | 'reject'>;
+  responses: Record<PlayerId, TradeResponse>;
+  counter: TradeCounteroffer | null;
 };
 
 export type LogEntry = {
@@ -121,11 +131,18 @@ export type GameState = {
   turn: number;
   /** Index into `players`. */
   current: number;
+  /** Dice rolls used to choose the first player; visible to every player. */
+  initiative: { eligible: PlayerId[]; rolls: Partial<Record<PlayerId, number>> } | null;
   dice: [number, number] | null;
   /** True until this turn's roll happens — a Knight played first must not skip it. */
   mustRoll: boolean;
-  /** Setup draft: round 1 forward, round 2 in reverse. */
-  setup: { round: 1 | 2; placing: 'settlement' | 'road'; lastVertex: VertexId | null } | null;
+  /** Setup draft: round 1 follows order, round 2 follows it in reverse. */
+  setup: {
+    round: 1 | 2;
+    placing: 'settlement' | 'road';
+    lastVertex: VertexId | null;
+    order: PlayerId[];
+  } | null;
   /** Cards owed by each player after a 7. Empty object means nobody owes. */
   pendingDiscards: Record<PlayerId, number>;
   /** Who the current player may steal from, once the robber has moved. */
@@ -143,6 +160,7 @@ export type GameState = {
 };
 
 export type Action =
+  | { type: 'rollForStart' }
   | { type: 'placeSetupSettlement'; vertex: VertexId }
   | { type: 'placeSetupRoad'; edge: EdgeId }
   | { type: 'rollDice' }
@@ -160,6 +178,8 @@ export type Action =
   | { type: 'bankTrade'; give: Resource; want: Resource }
   | { type: 'offerTrade'; give: ResourceCounts; want: ResourceCounts }
   | { type: 'respondTrade'; accept: boolean }
+  | { type: 'counterTrade'; give: ResourceCounts; want: ResourceCounts }
+  | { type: 'respondCounterTrade'; accept: boolean }
   | { type: 'acceptTradeWith'; player: PlayerId }
   | { type: 'cancelTrade' }
   | { type: 'endTurn' };

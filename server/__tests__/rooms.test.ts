@@ -39,6 +39,16 @@ function seatOf(result: { room: Room; seat: Seat } | string): { room: Room; seat
   return result;
 }
 
+function rollForStartingPlayer(room: Room): void {
+  let guard = 0;
+  while (room.state?.phase === 'initiative' && guard++ < 100) {
+    const who = room.state.players[room.state.current].id;
+    const error = act(room, who, { type: 'rollForStart' });
+    if (error) throw new Error(error);
+  }
+  if (room.state?.phase === 'initiative') throw new Error('initiative roll-off did not finish');
+}
+
 /** Open a room with `names[0]` hosting and the rest joining. */
 function openRoom(names: string[]): { room: Room; seats: Seat[] } {
   const host = createRoom(names[0], nextSocket());
@@ -68,6 +78,7 @@ describe('the in-memory room store', () => {
     expect(a.room.state!.board.hexes).not.toEqual(b.room.state!.board.hexes);
 
     // A move in one game does not touch the other.
+    rollForStartingPlayer(a.room);
     const before = structuredClone(b.room.state!);
     const who = a.room.state!.players[a.room.state!.current].id;
     const spot = legalMoves(a.room.state!, who).settlementSpots[0];
@@ -280,6 +291,40 @@ describe('room persistence', () => {
     expect(restored.state).not.toBeNull();
     expect(restored.seats.every((seat) => seat.socketId === null)).toBe(true);
     expect(restored.state!.players.every((player) => !player.connected)).toBe(true);
+  });
+
+  it('migrates saved games from before initiative and counteroffers', () => {
+    const { room, seats } = openRoom(['Ann', 'Bob']);
+    expect(startGame(room, seats[0].playerId)).toBeNull();
+    room.state!.phase = 'setup';
+    room.state!.initiative = null;
+    room.state!.setup = {
+      round: 1,
+      placing: 'settlement',
+      lastVertex: null,
+      order: room.state!.players.map((player) => player.id),
+    };
+    const give = { brick: 1, lumber: 0, wool: 0, grain: 0, ore: 0 };
+    const want = { brick: 0, lumber: 0, wool: 0, grain: 0, ore: 1 };
+    room.state!.trade = {
+      from: seats[0].playerId,
+      give,
+      want,
+      responses: { [seats[1].playerId]: 'pending' },
+      counter: null,
+    };
+    const legacy = JSON.parse(JSON.stringify(room)) as Record<string, unknown>;
+    const legacyState = legacy.state as Record<string, unknown>;
+    delete legacyState.initiative;
+    delete (legacyState.setup as Record<string, unknown>).order;
+    delete (legacyState.trade as Record<string, unknown>).counter;
+    fs.writeFileSync(file(), JSON.stringify([legacy]));
+
+    enablePersistence(file());
+    const restored = getRoom(room.code)!;
+    expect(restored.state?.initiative).toBeNull();
+    expect(restored.state?.setup?.order).toEqual(seats.map((seat) => seat.playerId));
+    expect(restored.state?.trade?.counter).toBeNull();
   });
 
   it('fails clearly on invalid JSON without clearing the current store', () => {

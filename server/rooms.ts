@@ -58,7 +58,17 @@ let dataFile: string | null = null;
 const TERRAIN_TYPES: readonly Terrain[] = ['hills', 'forest', 'pasture', 'fields', 'mountains', 'desert', 'sea', 'gold'];
 const DEV_CARD_TYPES: readonly DevCardType[] = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly', 'victoryPoint'];
 const PORT_TYPES: readonly PortType[] = [...RESOURCES, 'any'];
-const PHASES: readonly Phase[] = ['lobby', 'setup', 'rolling', 'discarding', 'movingRobber', 'stealing', 'main', 'finished'];
+const PHASES: readonly Phase[] = [
+  'lobby',
+  'initiative',
+  'setup',
+  'rolling',
+  'discarding',
+  'movingRobber',
+  'stealing',
+  'main',
+  'finished',
+];
 
 type DataRecord = Record<string, unknown>;
 
@@ -126,13 +136,49 @@ function isLogEntry(value: unknown, playerIds: Set<string>): value is LogEntry {
 }
 
 function isTradeOffer(value: unknown, playerIds: Set<string>): value is TradeOffer {
+  if (!isRecord(value)) return false;
+  const counter = value.counter;
+  const counterValid =
+    counter === null ||
+    (isRecord(counter) &&
+      typeof counter.from === 'string' &&
+      playerIds.has(counter.from) &&
+      counter.from !== value.from &&
+      isResourceCounts(counter.give) &&
+      isResourceCounts(counter.want));
+  const responsesValid = isPlayerRecord(value.responses, playerIds, (response) =>
+    isOneOf(response, ['pending', 'accept', 'reject', 'counter']),
+  );
+  const counterResponseValid =
+    counter === null ||
+    (isRecord(counter) &&
+      typeof counter.from === 'string' &&
+      isRecord(value.responses) &&
+      value.responses[counter.from] === 'counter');
   return (
-    isRecord(value) &&
     typeof value.from === 'string' &&
     playerIds.has(value.from) &&
     isResourceCounts(value.give) &&
     isResourceCounts(value.want) &&
-    isPlayerRecord(value.responses, playerIds, (response) => isOneOf(response, ['pending', 'accept', 'reject']))
+    responsesValid &&
+    counterValid &&
+    counterResponseValid
+  );
+}
+
+function isInitiative(value: unknown, playerIds: Set<string>): boolean {
+  if (value === null) return true;
+  if (!isRecord(value) || !Array.isArray(value.eligible) || !isRecord(value.rolls)) return false;
+
+  const eligible: string[] = [];
+  for (const id of value.eligible) {
+    if (typeof id !== 'string' || !playerIds.has(id)) return false;
+    eligible.push(id);
+  }
+  if (eligible.length === 0 || new Set(eligible).size !== eligible.length) return false;
+
+  return Object.entries(value.rolls).every(
+    ([id, roll]) => eligible.includes(id) && isNonNegativeInteger(roll) && roll >= 2 && roll <= 12,
   );
 }
 
@@ -214,17 +260,28 @@ function isGameState(value: unknown): value is GameState {
       isOneOf(value.setup.round, [1, 2]) &&
       isOneOf(value.setup.placing, ['settlement', 'road']) &&
       (value.setup.lastVertex === null ||
-        (typeof value.setup.lastVertex === 'string' && vertexIds.has(value.setup.lastVertex))));
+        (typeof value.setup.lastVertex === 'string' && vertexIds.has(value.setup.lastVertex))) &&
+      Array.isArray(value.setup.order) &&
+      value.setup.order.length === players.length &&
+      value.setup.order.every((id) => typeof id === 'string' && playerIds.has(id)) &&
+      new Set(value.setup.order).size === players.length);
+  const initiativeValid = isInitiative(value.initiative, playerIds);
   const tradeValid = value.trade === null || isTradeOffer(value.trade, playerIds);
+  const phaseValid =
+    isOneOf(value.phase, PHASES) &&
+    (value.phase === 'initiative'
+      ? value.initiative !== null && initiativeValid && value.setup === null
+      : value.initiative === null);
 
   return (
-    isOneOf(value.phase, PHASES) &&
+    phaseValid &&
     isNonNegativeInteger(value.current) &&
     value.current < players.length &&
     isNonNegativeInteger(value.turn) &&
     diceValid &&
     typeof value.mustRoll === 'boolean' &&
     setupValid &&
+    initiativeValid &&
     isPlayerRecord(value.pendingDiscards, playerIds, isNonNegativeInteger) &&
     Array.isArray(value.stealTargets) &&
     value.stealTargets.every((id) => typeof id === 'string' && playerIds.has(id)) &&
@@ -250,6 +307,25 @@ function isGameState(value: unknown): value is GameState {
     value.log.every((entry) => isLogEntry(entry, playerIds)) &&
     isNonNegativeInteger(value.nextLogId)
   );
+}
+
+function migrateRoomData(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  for (const candidate of value) {
+    if (!isRecord(candidate) || !isRecord(candidate.state)) continue;
+    const state = candidate.state;
+    if (!('initiative' in state)) state.initiative = null;
+    if (
+      state.phase === 'setup' &&
+      isRecord(state.setup) &&
+      !('order' in state.setup) &&
+      Array.isArray(state.players)
+    ) {
+      state.setup.order = state.players.filter(isRecord).map((player) => player.id);
+    }
+    if (isRecord(state.trade) && !('counter' in state.trade)) state.trade.counter = null;
+  }
+  return value;
 }
 
 function isSeat(value: unknown): value is Seat {
@@ -342,6 +418,7 @@ export function enablePersistence(file: string): void {
   } catch (error) {
     throw new Error(`Room data at ${file} is not valid JSON`, { cause: error });
   }
+  saved = migrateRoomData(saved);
   if (!isRoomArray(saved)) throw new Error(`Room data at ${file} has an invalid structure`);
 
   rooms.clear();

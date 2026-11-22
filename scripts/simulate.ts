@@ -172,6 +172,7 @@ function decide(state: GameState, id: PlayerId): Action | null {
   const moves = legalMoves(state, id);
   const me = playerById(state, id)!;
 
+  if (state.phase === 'initiative') return { type: 'rollForStart' };
   if (state.phase === 'setup') {
     return moves.settlementSpots.length
       ? { type: 'placeSetupSettlement', vertex: best(moves.settlementSpots, (v) => vertexScore(state, v, id))! }
@@ -267,7 +268,7 @@ while (!state.winner && steps++ < STEP_LIMIT) {
     break;
   }
 
-  if (state.phase !== 'setup' && state.turn > turnShown) {
+  if (state.phase !== 'setup' && state.phase !== 'initiative' && state.turn > turnShown) {
     turnShown = state.turn;
     console.log(`\nTurn ${state.turn} — ${nameOf(state.players[state.current].id)}`);
   }

@@ -305,7 +305,13 @@ export function TradeModal({
                   <span className="turn-dot" style={{ ['--turn-color' as string]: p.color }} />
                   <span>{p.name}</span>
                   <span className="response-state" data-state={state}>
-                    {state === 'accept' ? 'accepted' : state === 'reject' ? 'declined' : 'thinking…'}
+                    {state === 'accept'
+                      ? 'accepted'
+                      : state === 'reject'
+                        ? 'declined'
+                        : state === 'counter'
+                          ? 'countered'
+                          : 'thinking…'}
                   </span>
                   {state === 'accept' && (
                     <button
@@ -323,6 +329,30 @@ export function TradeModal({
               );
             })}
         </div>
+        {offer.counter && (
+          <div style={{ marginTop: 18 }}>
+            <h3 style={{ fontSize: 15 }}>Counteroffer from {view.players.find((p) => p.id === offer.counter!.from)?.name}</h3>
+            <p className="modal-lede">
+              They give {describe(offer.counter.give)} and want {describe(offer.counter.want)}.
+            </p>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => send({ type: 'respondCounterTrade', accept: false })}>
+                Decline counter
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={!view.moves.canAcceptCounter}
+                onClick={() => {
+                  send({ type: 'respondCounterTrade', accept: true });
+                  onClose();
+                }}
+              >
+                Accept counter
+              </button>
+            </div>
+            {!view.moves.canAcceptCounter && <p className="log-empty">You no longer hold the requested cards.</p>}
+          </div>
+        )}
         <div className="modal-actions">
           <button
             className="btn"
@@ -410,9 +440,22 @@ export function TradeModal({
 
 /** Shown to everyone who is not the offering player. */
 export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Action) => void }) {
+  const [countering, setCountering] = useState(false);
+  const [give, setGive] = useState<ResourceCounts>(emptyCounts);
+  const [want, setWant] = useState<ResourceCounts>(emptyCounts);
   const offer = view.trade;
-  if (!offer || !view.moves.mustAnswerTrade) return null;
+  if (!offer) return null;
+  if (offer.counter?.from === view.you?.id) {
+    return (
+      <Scrim>
+        <h2>Counteroffer sent</h2>
+        <p className="modal-lede">Your counteroffer is waiting for {view.players.find((p) => p.id === offer.from)?.name}.</p>
+      </Scrim>
+    );
+  }
+  if (!view.moves.mustAnswerTrade) return null;
   const from = view.players.find((p) => p.id === offer.from);
+  const overlaps = RESOURCES.some((r) => give[r] > 0 && want[r] > 0);
 
   return (
     <Scrim>
@@ -420,19 +463,71 @@ export function TradeOfferModal({ view, send }: { view: PlayerView; send: (a: Ac
       <p className="modal-lede">
         They give {describe(offer.give)} and want {describe(offer.want)} back.
       </p>
-      <div className="modal-actions">
-        <button className="btn" onClick={() => send({ type: 'respondTrade', accept: false })}>
-          No thanks
-        </button>
-        <button
-          className="btn btn-primary"
-          disabled={!view.moves.canAcceptTrade}
-          onClick={() => send({ type: 'respondTrade', accept: true })}
-        >
-          Accept
-        </button>
-      </div>
-      {!view.moves.canAcceptTrade && <p className="log-empty">You do not hold what they want.</p>}
+      {countering ? (
+        <>
+          <div className="trade-sides">
+            <div className="trade-side">
+              <h3>You give</h3>
+              <CountPicker counts={give} max={view.you?.resources ?? emptyCounts()} onChange={setGive} />
+            </div>
+            <div className="trade-swap">in exchange for</div>
+            <div className="trade-side">
+              <h3>You want</h3>
+              <CountPicker counts={want} max={view.moves.counterWantMax} onChange={setWant} showHeld={false} />
+            </div>
+          </div>
+          {overlaps && <p className="log-empty">Give and request different resource types.</p>}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setCountering(false)}>
+              Back
+            </button>
+            <button className="btn" onClick={() => send({ type: 'respondTrade', accept: false })}>
+              No thanks
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={
+                !view.moves.canCounterTrade ||
+                totalOf(give) === 0 ||
+                totalOf(want) === 0 ||
+                overlaps
+              }
+              onClick={() => {
+                send({ type: 'counterTrade', give, want });
+                setCountering(false);
+                setGive(emptyCounts());
+                setWant(emptyCounts());
+              }}
+            >
+              Send counter
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {offer.counter && <p className="log-empty">Another player has a counteroffer waiting for a response.</p>}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => send({ type: 'respondTrade', accept: false })}>
+              No thanks
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={!view.moves.canAcceptTrade}
+              onClick={() => send({ type: 'respondTrade', accept: true })}
+            >
+              Accept
+            </button>
+            <button
+              className="btn"
+              disabled={!view.moves.canCounterTrade}
+              onClick={() => setCountering(true)}
+            >
+              Counteroffer
+            </button>
+          </div>
+          {!view.moves.canAcceptTrade && <p className="log-empty">You do not hold what they want.</p>}
+        </>
+      )}
     </Scrim>
   );
 }

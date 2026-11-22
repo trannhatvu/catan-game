@@ -11,6 +11,12 @@ const SEATS = [
 
 function draft(state: GameState): GameState {
   let s = state;
+  while (s.phase === 'initiative') {
+    const who = s.players[s.current].id;
+    const r = applyAction(s, who, { type: 'rollForStart' });
+    if (!r.ok) throw new Error(r.error);
+    s = r.state;
+  }
   while (s.phase === 'setup') {
     const who = s.players[s.current].id;
     const m = legalMoves(s, who);

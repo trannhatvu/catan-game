@@ -134,12 +134,16 @@ function BuildButton({
 function prompt(view: PlayerView, owed: number): string | null {
   if (view.winner) return null;
   if (owed > 0) return `Discard ${owed} ${owed === 1 ? 'card' : 'cards'}.`;
+  if (view.moves.mustAnswerCounter) return 'Answer the counteroffer.';
+  if (view.trade?.counter?.from === view.you?.id) return 'Waiting for the counteroffer response.';
   if (!view.moves.isMyTurn) {
     if (view.moves.mustAnswerTrade) return 'Answer the trade offer.';
     const who = view.players.find((p) => p.id === view.currentPlayerId);
     return who ? `${who.name} is playing.` : null;
   }
   switch (view.phase) {
+    case 'initiative':
+      return 'Roll the dice to choose the first player.';
     case 'setup':
       return view.setup?.placing === 'settlement'
         ? 'Place a settlement on any free corner.'
@@ -161,6 +165,7 @@ export type HandBarProps = {
   view: PlayerView;
   pending: Pending;
   setPending: (p: Pending) => void;
+  onRollForStart: () => void;
   onRoll: () => void;
   onEndTurn: () => void;
   onBuyDevCard: () => void;
@@ -172,6 +177,7 @@ export function HandBar({
   view,
   pending,
   setPending,
+  onRollForStart,
   onRoll,
   onEndTurn,
   onBuyDevCard,
@@ -194,7 +200,29 @@ export function HandBar({
 
       {hint && <p className="prompt">{hint}</p>}
 
+      {view.phase === 'initiative' && view.initiative && (
+        <div className="responses" aria-label="First-player rolls">
+          {view.initiative.eligible.map((id) => {
+            const player = view.players.find((p) => p.id === id);
+            const score = view.initiative!.rolls[id];
+            return (
+              <div className="response" key={id}>
+                <span className="turn-dot" style={{ ['--turn-color' as string]: player?.color ?? 'transparent' }} />
+                <span>{player?.name ?? 'Player'}</span>
+                <span className="response-state">{score === undefined ? 'waiting to roll' : `rolled ${score}`}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="actions">
+        {moves.canRollForStart && (
+          <button className="btn btn-primary" onClick={onRollForStart}>
+            Roll for first player
+          </button>
+        )}
+
         {myTurn && view.phase === 'rolling' && (
           <button className="btn btn-primary" onClick={onRoll}>
             Roll the dice

@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { io as connect, type Socket } from 'socket.io-client';
 import { start, stop } from '../index';
 import type { PlayerView } from '../../shared/redact';
-import type { Action, PlayerId } from '../../shared/types';
+import { emptyResources, type Action, type PlayerId } from '../../shared/types';
+import { getRoom } from '../rooms';
 
 type Sync = {
   room: {
@@ -114,6 +115,17 @@ function makeClient(): Client {
   return c;
 }
 
+async function finishInitiative(...clients: Client[]): Promise<void> {
+  const observer = clients[0];
+  while (observer.view.phase === 'initiative') {
+    const actor = clients.find((client) => client.id === observer.view.currentPlayerId);
+    if (!actor) throw new Error('no connected client owns the initiative roll');
+    const before = observer.view.log.length;
+    actor.send({ type: 'rollForStart' });
+    await observer.until((sync) => (sync.view?.log.length ?? 0) > before, 'initiative roll');
+  }
+}
+
 beforeAll(async () => {
   const port = await start(0);
   url = `http://localhost:${port}`;
@@ -146,6 +158,7 @@ describe('two players over sockets', () => {
     host.socket.emit('game:start');
     await host.until((s) => s.view !== null, 'the board to be dealt');
     await guest.until((s) => s.view !== null, 'the board to be dealt');
+    await finishInitiative(host, guest);
 
     // The board is identical for both, and the deck stays on the server.
     expect(guest.view.board.hexes).toEqual(host.view.board.hexes);
@@ -309,6 +322,8 @@ describe('two players over sockets', () => {
     await host.until((s) => s.room.players.length === 2, 'the guest');
     host.socket.emit('game:start');
     await host.until((s) => s.view !== null, 'the board');
+    await guest.until((s) => s.view !== null, 'the board');
+    await finishInitiative(host, guest);
 
     const onTurn = host.view.moves.isMyTurn ? host : guest;
     for (const junk of [null, 'hello', 42, {}, { type: 'nonsense' }, { type: 'buildRoad' }]) {
@@ -321,5 +336,61 @@ describe('two players over sockets', () => {
     expect(Object.keys(onTurn.view.board.roads)).toHaveLength(0);
     onTurn.send({ type: 'placeSetupSettlement', vertex: onTurn.view.moves.settlementSpots[0] });
     await onTurn.until((s) => Object.keys(s.view!.board.buildings).length === 1, 'the settlement');
+  });
+
+  it('sends and accepts a counteroffer without exposing either hand', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([host.ready(), guest.ready()]);
+    await host.create('Ann');
+    await guest.join(host.code, 'Bob');
+    await host.until((s) => s.room.players.length === 2, 'the guest');
+    host.socket.emit('game:start');
+    await host.until((s) => s.view !== null, 'the board');
+    await guest.until((s) => s.view !== null, 'the board');
+
+    const room = getRoom(host.code)!;
+    const state = room.state!;
+    const offerer = state.players.find((p) => p.id === host.id)!;
+    const responder = state.players.find((p) => p.id === guest.id)!;
+    state.phase = 'main';
+    state.current = state.players.indexOf(offerer);
+    state.initiative = null;
+    state.setup = null;
+    state.mustRoll = false;
+    offerer.resources = { ...emptyResources(), brick: 2 };
+    responder.resources = { ...emptyResources(), ore: 2 };
+    state.bank.brick -= 2;
+    state.bank.ore -= 2;
+
+    host.send({
+      type: 'offerTrade',
+      give: { ...emptyResources(), brick: 1 },
+      want: { ...emptyResources(), ore: 1 },
+    });
+    await Promise.all([
+      host.until((s) => s.view?.trade !== null, 'the original offer'),
+      guest.until((s) => s.view?.trade !== null, 'the original offer'),
+    ]);
+
+    guest.send({
+      type: 'counterTrade',
+      give: { ...emptyResources(), ore: 2 },
+      want: { ...emptyResources(), brick: 1 },
+    });
+    await Promise.all([
+      host.until((s) => s.view?.trade?.counter?.from === guest.id, 'the counteroffer'),
+      guest.until((s) => s.view?.trade?.counter?.from === guest.id, 'the counteroffer'),
+    ]);
+    expect(host.view.trade?.counter?.give.ore).toBe(2);
+    expect(host.view.players.find((p) => p.id === guest.id)).not.toHaveProperty('resources');
+
+    host.send({ type: 'respondCounterTrade', accept: true });
+    await Promise.all([
+      host.until((s) => s.view?.trade === null, 'the completed counteroffer'),
+      guest.until((s) => s.view?.trade === null, 'the completed counteroffer'),
+    ]);
+    expect(host.view.you?.resources).toMatchObject({ brick: 1, ore: 2 });
+    expect(guest.view.you?.resources).toMatchObject({ brick: 1, ore: 0 });
   });
 });

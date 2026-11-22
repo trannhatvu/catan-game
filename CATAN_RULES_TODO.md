@@ -19,17 +19,21 @@ Validation: `npm test -- shared/__tests__/rules.test.ts
 shared/__tests__/setup.test.ts` passed (38 tests), and `npm run build` passed
 on 2026-11-22. The build retains the existing large 3D-bundle warning.
 
-## Remaining rulebook work
+## Delivery 2 — Setup and negotiation (complete)
 
-- [ ] Add a player-to-player counteroffer flow, including reducer validation,
-  redacted state, UI, and multiplayer tests.
-- [ ] Determine the first player by the highest dice roll before the opening
-  draft; handle tied rolls and cover the order with tests.
-- [ ] Decide whether the Beginner option should pre-place the rulebook's
-  starting pieces or be relabeled as a fixed board with the normal draft.
-- [ ] Match the rulebook's letter-order procedure for variable number-token
-  placement, or explicitly retain the current valid-board randomizer as an app
-  variant.
+- [x] Add validated player counteroffers, include them in the public trade
+  state, expose them in the UI, and cover the flow with reducer and socket tests.
+- [x] Roll for the first player before the draft; tied leaders reroll, and the
+  winner starts both the snake draft and the first turn.
+- [x] Relabel Beginner as **Fixed board** to describe its deterministic map and
+  normal draft without claiming the rulebook's pre-arranged starting pieces.
+- [x] Deal Classic number tokens counterclockwise in the rulebook's A–R order,
+  skipping the desert; retain the legal randomizer for the large-map variant.
+
+Validation: `npm test` passed (88 tests), `npm run build` passed, and
+`npm run simulate -- 2024 3` reached a winner with no resource or development
+deck conservation warnings. A two-client browser smoke test confirmed the
+initiative roll handoff and fixed-board label.
 
 ## Completed
 

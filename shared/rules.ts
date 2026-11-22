@@ -281,7 +281,7 @@ export function createGame(
   for (const r of RESOURCES) bank[r] = BANK_PER_RESOURCE;
 
   const state: GameState = {
-    phase: 'setup',
+    phase: 'initiative',
     players,
     board: generateBoard(rng, scenario),
     bank,
@@ -289,9 +289,10 @@ export function createGame(
     rng,
     turn: 1,
     current: 0,
+    initiative: { eligible: players.map((p) => p.id), rolls: {} },
     dice: null,
     mustRoll: true,
-    setup: { round: 1, placing: 'settlement', lastVertex: null },
+    setup: null,
     pendingDiscards: {},
     stealTargets: [],
     freeRoads: 0,
@@ -303,7 +304,7 @@ export function createGame(
     log: [],
     nextLogId: 1,
   };
-  addLog(state, null, 'Setup: place your first settlement.');
+  addLog(state, null, 'Each player rolls to determine who starts.');
   return state;
 }
 
@@ -317,20 +318,20 @@ export function createGame(
  */
 function advanceSetup(state: GameState): void {
   const setup = state.setup!;
-  const last = state.players.length - 1;
+  const orderIndex = setup.order.indexOf(currentPlayer(state).id);
 
   if (setup.round === 1) {
-    if (state.current < last) {
-      state.current += 1;
+    if (orderIndex < setup.order.length - 1) {
+      state.current = state.players.findIndex((p) => p.id === setup.order[orderIndex + 1]);
     } else {
       setup.round = 2;
     }
-  } else if (state.current > 0) {
-    state.current -= 1;
+  } else if (orderIndex > 0) {
+    state.current = state.players.findIndex((p) => p.id === setup.order[orderIndex - 1]);
   } else {
     state.setup = null;
     state.phase = 'rolling';
-    state.current = 0;
+    state.current = state.players.findIndex((p) => p.id === setup.order[0]);
     addLog(state, currentPlayer(state).id, 'begins the first turn.');
     return;
   }
@@ -454,7 +455,8 @@ export function applyAction(state: GameState, playerId: PlayerId, action: Action
 
   // Discarding blocks the table, and responding to a trade is the only thing an
   // off-turn player may ever do. Everything else is the current player's alone.
-  const offTurnAllowed = action.type === 'discard' || action.type === 'respondTrade';
+  const offTurnAllowed =
+    action.type === 'discard' || action.type === 'respondTrade' || action.type === 'counterTrade';
   if (!offTurnAllowed && currentPlayer(state).id !== playerId) return fail('It is not your turn.');
 
   const next = structuredClone(state);
@@ -466,6 +468,44 @@ export function applyAction(state: GameState, playerId: PlayerId, action: Action
 /** Returns a failure, or undefined when the mutation succeeded. */
 function reduce(state: GameState, me: Player, action: Action): ApplyResult | undefined {
   switch (action.type) {
+    case 'rollForStart': {
+      if (state.phase !== 'initiative' || !state.initiative) return fail('You cannot roll for the first player now.');
+      if (!state.initiative.eligible.includes(me.id) || state.initiative.rolls[me.id] !== undefined) {
+        return fail('You have already rolled.');
+      }
+
+      const score = rollDie(state.rng) + rollDie(state.rng);
+      state.initiative.rolls[me.id] = score;
+      addLog(state, me.id, `rolls ${score} to choose the first player.`);
+
+      const unrolled = state.initiative.eligible.filter((id) => state.initiative!.rolls[id] === undefined);
+      if (unrolled.length > 0) {
+        state.current = state.players.findIndex((p) => p.id === unrolled[0]);
+        return;
+      }
+
+      const highest = Math.max(...state.initiative.eligible.map((id) => state.initiative!.rolls[id]!));
+      const leaders = state.initiative.eligible.filter((id) => state.initiative!.rolls[id] === highest);
+      if (leaders.length > 1) {
+        state.initiative = { eligible: leaders, rolls: {} };
+        state.current = state.players.findIndex((p) => p.id === leaders[0]);
+        addLog(state, null, `The highest roll is tied at ${highest}; tied players roll again.`);
+        return;
+      }
+
+      const firstIndex = state.players.findIndex((p) => p.id === leaders[0]);
+      const order = Array.from(
+        { length: state.players.length },
+        (_, offset) => state.players[(firstIndex + offset) % state.players.length].id,
+      );
+      state.current = firstIndex;
+      state.initiative = null;
+      state.phase = 'setup';
+      state.setup = { round: 1, placing: 'settlement', lastVertex: null, order };
+      addLog(state, leaders[0], 'has the highest roll and starts the setup draft.');
+      return;
+    }
+
     // -- setup --------------------------------------------------------------
     case 'placeSetupSettlement': {
       if (state.phase !== 'setup' || state.setup!.placing !== 'settlement') return fail('Not placing a settlement.');
@@ -663,7 +703,7 @@ function reduce(state: GameState, me: Player, action: Action): ApplyResult | und
 
       const responses: Record<PlayerId, 'pending' | 'accept' | 'reject'> = {};
       for (const p of state.players) if (p.id !== me.id) responses[p.id] = 'pending';
-      state.trade = { from: me.id, give, want, responses };
+      state.trade = { from: me.id, give, want, responses, counter: null };
       addLog(state, me.id, `offers ${describe(give)} for ${describe(want)}.`);
       return;
     }
@@ -671,8 +711,59 @@ function reduce(state: GameState, me: Player, action: Action): ApplyResult | und
     case 'respondTrade': {
       if (!state.trade) return fail('There is no offer to answer.');
       if (state.trade.from === me.id) return fail('You cannot answer your own offer.');
+      if (state.trade.responses[me.id] !== 'pending') return fail('You have already answered this offer.');
       if (action.accept && !canAfford(me, state.trade.want)) return fail('You do not hold what they want.');
       state.trade.responses[me.id] = action.accept ? 'accept' : 'reject';
+      return;
+    }
+
+    case 'counterTrade': {
+      const offer = state.trade;
+      if (!offer) return fail('There is no offer to counter.');
+      if (offer.from === me.id) return fail('You cannot counter your own offer.');
+      if (offer.counter) return fail('Another counteroffer is already on the table.');
+      if (offer.responses[me.id] !== 'pending') return fail('You have already answered this offer.');
+
+      const give = sanitiseCounts(action.give);
+      const want = sanitiseCounts(action.want);
+      if (isEmpty(give) || isEmpty(want)) return fail('A counteroffer needs cards on both sides.');
+      if (RESOURCES.some((r) => give[r] > 0 && want[r] > 0)) {
+        return fail('You cannot trade the same resource type on both sides.');
+      }
+      if (!RESOURCES.every((r) => me.resources[r] >= give[r])) return fail('You do not hold what you are offering.');
+      const originalPlayer = playerById(state, offer.from)!;
+      if (!canAfford(originalPlayer, want)) return fail('They do not hold what you want.');
+
+      offer.counter = { from: me.id, give, want };
+      offer.responses[me.id] = 'counter';
+      addLog(state, me.id, `counters with ${describe(give)} for ${describe(want)}.`);
+      return;
+    }
+
+    case 'respondCounterTrade': {
+      const offer = state.trade;
+      if (!offer) return fail('There is no counteroffer to answer.');
+      if (offer.from !== me.id) return fail('Only the original offerer can answer the counteroffer.');
+      const counter = offer.counter;
+      if (!counter) return fail('There is no counteroffer to answer.');
+      const partner = playerById(state, counter.from);
+      if (!partner) return fail('Unknown player.');
+
+      if (!action.accept) {
+        offer.responses[counter.from] = 'reject';
+        offer.counter = null;
+        addLog(state, me.id, `declines ${partner.name}'s counteroffer.`);
+        return;
+      }
+      if (!canAfford(me, counter.want)) return fail('You no longer hold what they want.');
+      if (!canAfford(partner, counter.give)) return fail('They no longer hold what they are offering.');
+
+      for (const r of RESOURCES) {
+        me.resources[r] += counter.give[r] - counter.want[r];
+        partner.resources[r] += counter.want[r] - counter.give[r];
+      }
+      state.trade = null;
+      addLog(state, me.id, `accepts ${partner.name}'s counteroffer.`);
       return;
     }
 
@@ -813,6 +904,7 @@ function playDevCard(state: GameState, me: Player, action: Action): ApplyResult 
 
 export type LegalMoves = {
   isMyTurn: boolean;
+  canRollForStart: boolean;
   canRoll: boolean;
   canEndTurn: boolean;
   canBuyDevCard: boolean;
@@ -828,16 +920,33 @@ export type LegalMoves = {
   canOfferTrade: boolean;
   /** Most of each resource any single opponent holds: the cap on what an offer may ask for. */
   tradeWantMax: ResourceCounts;
+  /** A non-disclosing upper bound for resources requested in a counteroffer. */
+  counterWantMax: ResourceCounts;
   mustAnswerTrade: boolean;
   /** Whether the viewer holds what the offer on the table wants. */
   canAcceptTrade: boolean;
+  canCounterTrade: boolean;
+  mustAnswerCounter: boolean;
+  canAcceptCounter: boolean;
 };
 
 export function legalMoves(state: GameState, playerId: PlayerId): LegalMoves {
   const me = playerById(state, playerId);
   const mine = me !== undefined && state.players[state.current]?.id === playerId;
+  const counter = state.trade?.counter;
+  const counterPlayer = counter ? playerById(state, counter.from) : undefined;
+  const canCounterTrade =
+    state.trade !== null &&
+    state.trade.from !== playerId &&
+    state.trade.counter === null &&
+    state.trade.responses[playerId] === 'pending';
+  const counterWantMax = emptyResources();
+  if (canCounterTrade) {
+    for (const r of RESOURCES) counterWantMax[r] = BANK_PER_RESOURCE;
+  }
   const moves: LegalMoves = {
     isMyTurn: mine,
+    canRollForStart: mine && state.phase === 'initiative',
     canRoll: false,
     canEndTurn: false,
     canBuyDevCard: false,
@@ -852,9 +961,21 @@ export function legalMoves(state: GameState, playerId: PlayerId): LegalMoves {
     freeRoads: state.freeRoads,
     canOfferTrade: false,
     tradeWantMax: emptyResources(),
+    counterWantMax,
     mustAnswerTrade:
       state.trade !== null && state.trade.from !== playerId && state.trade.responses[playerId] === 'pending',
     canAcceptTrade: me !== undefined && state.trade !== null && canAfford(me, state.trade.want),
+    canCounterTrade,
+    mustAnswerCounter: state.trade !== null && state.trade.from === playerId && state.trade.counter !== null,
+    canAcceptCounter:
+      me !== undefined &&
+      state.trade !== null &&
+      state.trade.from === playerId &&
+      counter !== null &&
+      counter !== undefined &&
+      counterPlayer !== undefined &&
+      canAfford(me, counter.want) &&
+      canAfford(counterPlayer, counter.give),
   };
   if (!me || state.phase === 'finished' || state.phase === 'lobby') return moves;
 
@@ -885,6 +1006,15 @@ export function legalMoves(state: GameState, playerId: PlayerId): LegalMoves {
   }
 
   switch (state.phase) {
+    case 'initiative': {
+      const initiative = state.initiative;
+      moves.canRollForStart =
+        initiative !== null &&
+        initiative.eligible.includes(playerId) &&
+        initiative.rolls[playerId] === undefined;
+      break;
+    }
+
     case 'rolling':
       moves.canRoll = true;
       break;
