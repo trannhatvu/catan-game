@@ -202,6 +202,32 @@ describe('rolling and production', () => {
     expect(discarded.phase).toBe('movingRobber');
     expect(handSize(discarded, 'A')).toBe(5);
   });
+
+  it('requires stealing from an eligible victim when multiple are present', () => {
+    let s = intoMain(runSetup(createGame(SEATS, 7)));
+    s.phase = 'movingRobber';
+
+    const hex = BOARD.hexes.find((candidate) => candidate !== s.board.robber)!;
+    const vertices = BOARD.hexVertices[hex];
+    const first = vertices[0];
+    const second = vertices.find(
+      (vertex) => vertex !== first && !BOARD.vertexNeighbours[first].includes(vertex),
+    )!;
+    s.board.buildings = {
+      [first]: { owner: 'B', type: 'settlement' },
+      [second]: { owner: 'C', type: 'settlement' },
+    };
+    playerById(s, 'B')!.resources.brick = 1;
+    playerById(s, 'C')!.resources.lumber = 1;
+
+    s = must(s, 'A', { type: 'moveRobber', hex });
+    expect(s.phase).toBe('stealing');
+    expect(s.stealTargets).toEqual(expect.arrayContaining(['B', 'C']));
+
+    const before = structuredClone(s);
+    expect(expectRejected(s, 'A', { type: 'steal', target: null })).toMatch(/must steal/i);
+    expect(s).toEqual(before);
+  });
 });
 
 describe('building', () => {
@@ -496,6 +522,22 @@ describe('trading', () => {
         want: { ...emptyResources(), brick: 1 },
       }),
     ).toMatch(/do not hold/i);
+  });
+
+  it('refuses same-resource offers that would give cards away', () => {
+    let s = clearHands(intoMain(runSetup(createGame(SEATS, 7))));
+    s = give(s, 'A', { ore: 2 });
+    s = give(s, 'B', { ore: 1 });
+    const before = structuredClone(s);
+
+    expect(
+      expectRejected(s, 'A', {
+        type: 'offerTrade',
+        give: { ...emptyResources(), ore: 2 },
+        want: { ...emptyResources(), ore: 1 },
+      }),
+    ).toMatch(/same resource type/i);
+    expect(s).toEqual(before);
   });
 
   it('refuses an offer nobody can pay, and an accept you cannot pay', () => {
