@@ -8,6 +8,8 @@ It covers reconnect ownership, persistence, production readiness, accessibility
 and mobile usability, and documentation. The separate CI and end-to-end
 automation initiative is intentionally excluded.
 
+Code paths in this plan are relative to the repository root.
+
 ## Recommended order
 
 1. Fix reconnect ownership (complete).
@@ -226,15 +228,15 @@ screens.
 
 **Goal:** Make current behavior and operational requirements easy to find.
 
-**Relevant files:** `README.md`, `PROGRESS.md`, `AGENTS.md`.
+**Relevant files:** `README.md`, `CATAN_RULES_SPEC.md`, `AGENTS.md`.
 
 ### Implementation
 
 1. Update setup, production startup, persistence, backup and recovery
    instructions after the behavior changes.
 2. Clearly distinguish local `just deploy` from remote deployment.
-3. Correct stale statements in the progress document, including room expiry and
-   restart behavior; retain dated historical results as historical.
+3. Keep current gameplay and setup details in the README and rulebook audit
+   findings in `CATAN_RULES_SPEC.md`; avoid a separate status snapshot.
 4. Document limits: 2–4 players, no in-game bots, and the large map's actual
    player limit.
 5. Update agent guidance for new ownership, persistence and deployment

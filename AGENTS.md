@@ -4,7 +4,7 @@
 
 Catan Online is a multiplayer browser game built with TypeScript, React, Vite,
 Express and Socket.IO. Node.js 20+ is required. See `README.md` for gameplay and
-setup; `PROGRESS.md` is a historical snapshot and may be outdated.
+setup.
 
 ## Commands
 
