@@ -31,7 +31,20 @@ export type RollEvent = {
  * covers the bank running short.
  */
 export function detectRoll(prev: PlayerView | null, next: PlayerView): RollEvent | null {
-  if (!prev || !prev.mustRoll || next.mustRoll || !next.dice) return null;
+  if (!prev || !next.dice) return null;
+
+  const previousInitiativeRolls = prev.initiative ? Object.keys(prev.initiative.rolls).length : 0;
+  const nextInitiativeRolls = next.initiative ? Object.keys(next.initiative.rolls).length : 0;
+  const initiativeRoll =
+    prev.phase === 'initiative' &&
+    prev.initiative !== null &&
+    (next.phase !== 'initiative' ||
+      next.initiative === null ||
+      next.initiative.eligible.length !== prev.initiative.eligible.length ||
+      nextInitiativeRolls !== previousInitiativeRolls);
+  if (initiativeRoll) return { dice: next.dice, producing: [], flights: [] };
+
+  if (!prev.mustRoll || next.mustRoll) return null;
   const total = next.dice[0] + next.dice[1];
   if (total === 7) return { dice: next.dice, producing: [], flights: [] };
 

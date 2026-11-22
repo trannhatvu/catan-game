@@ -5,12 +5,12 @@ import { resourceName, useI18n, type Translator } from '../i18n';
 
 export type Pending = 'settlement' | 'city' | 'road' | 'robber' | null;
 
-export function Dice({ dice }: { dice: [number, number] | null }) {
+export function Dice({ dice, rollId = 0 }: { dice: [number, number] | null; rollId?: number }) {
   if (!dice) return null;
   return (
     <div className="dice">
-      <Die value={dice[0]} />
-      <Die value={dice[1]} />
+      <Die key={`${rollId}-0`} value={dice[0]} />
+      <Die key={`${rollId}-1`} value={dice[1]} />
       <span className="dice-total">{dice[0] + dice[1]}</span>
     </div>
   );
@@ -54,7 +54,7 @@ const PIP_LAYOUT: Record<number, [number, number][]> = {
 function Die({ value }: { value: number }) {
   const { t } = useI18n();
   return (
-    <div className="die" data-rolling="true" key={value} aria-label={t('dieShowing', { value })}>
+    <div className="die" data-rolling="true" aria-label={t('dieShowing', { value })}>
       {(PIP_LAYOUT[value] ?? []).map(([row, col], i) => (
         <span key={i} className="pip" style={{ gridRow: row, gridColumn: col }} />
       ))}
@@ -166,6 +166,7 @@ function prompt(view: PlayerView, owed: number, t: Translator): string | null {
 
 export type HandBarProps = {
   view: PlayerView;
+  rollId: number;
   pending: Pending;
   setPending: (p: Pending) => void;
   onRollForStart: () => void;
@@ -178,6 +179,7 @@ export type HandBarProps = {
 
 export function HandBar({
   view,
+  rollId,
   pending,
   setPending,
   onRollForStart,
@@ -200,7 +202,7 @@ export function HandBar({
     <div className="handbar">
       <Cards resources={view.you?.resources ?? { brick: 0, lumber: 0, wool: 0, grain: 0, ore: 0 }} />
 
-      <Dice dice={view.dice} />
+      <Dice dice={view.dice} rollId={rollId} />
 
       {hint && <p className="prompt">{hint}</p>}
 

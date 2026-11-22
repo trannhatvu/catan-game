@@ -171,6 +171,7 @@ function Game({
 
       <HandBar
         view={view}
+        rollId={roll?.id ?? 0}
         pending={active}
         setPending={setPending}
         onRollForStart={() => api.send({ type: 'rollForStart' })}
