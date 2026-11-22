@@ -35,6 +35,24 @@ const io = new Server(http, { cors: { origin: true } });
 /** Which seat each live socket is sitting in. */
 const sockets = new Map<string, { room: Room; seat: Seat }>();
 
+function currentSeat(socket: Socket): { room: Room; seat: Seat } | undefined {
+  const seated = sockets.get(socket.id);
+  if (!seated) return undefined;
+  if (seated.seat.socketId !== socket.id || !seated.room.seats.includes(seated.seat)) {
+    sockets.delete(socket.id);
+    return undefined;
+  }
+  return seated;
+}
+
+function releaseSocket(socket: Socket): void {
+  const seated = currentSeat(socket);
+  if (!seated) return;
+  sockets.delete(socket.id);
+  leaveRoom(seated.room, seated.seat);
+  broadcast(seated.room);
+}
+
 /** Push everyone in a room their own view — each player sees only their own hand. */
 function broadcast(room: Room): void {
   // Every change ends in a broadcast, so this is where the store hits the disk.
@@ -52,6 +70,8 @@ function broadcast(room: Room): void {
 type Ack = (response: { ok: true; code: string; token: string; playerId: string } | { ok: false; error: string }) => void;
 
 function seatSocket(socket: Socket, room: Room, seat: Seat, ack?: Ack): void {
+  const previous = currentSeat(socket);
+  if (previous && (previous.room !== room || previous.seat !== seat)) releaseSocket(socket);
   sockets.set(socket.id, { room, seat });
   ack?.({ ok: true, code: room.code, token: seat.token, playerId: seat.playerId });
   broadcast(room);
@@ -72,19 +92,21 @@ io.on('connection', (socket) => {
   socket.on('room:rejoin', ({ code, token }: { code?: string; token?: string } = {}, ack?: Ack) => {
     const result = rejoinRoom(code, token, socket.id);
     if (typeof result === 'string') return ack?.({ ok: false, error: result });
+    if (result.previousSocketId && result.previousSocketId !== socket.id) {
+      sockets.delete(result.previousSocketId);
+      const previous = io.sockets.sockets.get(result.previousSocketId);
+      previous?.emit('seat:replaced');
+      previous?.disconnect(true);
+    }
     seatSocket(socket, result.room, result.seat, ack);
   });
 
   socket.on('room:leave', () => {
-    const seated = sockets.get(socket.id);
-    if (!seated) return;
-    sockets.delete(socket.id);
-    leaveRoom(seated.room, seated.seat);
-    broadcast(seated.room);
+    releaseSocket(socket);
   });
 
   socket.on('game:start', () => {
-    const seated = sockets.get(socket.id);
+    const seated = currentSeat(socket);
     if (!seated) return;
     const error = startGame(seated.room, seated.seat.playerId);
     if (error) return socket.emit('error:message', error);
@@ -92,7 +114,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('room:map', (map: unknown) => {
-    const seated = sockets.get(socket.id);
+    const seated = currentSeat(socket);
     if (!seated) return;
     const error = setMap(seated.room, seated.seat.playerId, map);
     if (error) return socket.emit('error:message', error);
@@ -100,7 +122,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('game:action', (action: Action) => {
-    const seated = sockets.get(socket.id);
+    const seated = currentSeat(socket);
     if (!seated) return socket.emit('error:message', 'You are not in a game.');
     if (!action || typeof action !== 'object' || typeof action.type !== 'string') return;
 
@@ -112,7 +134,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const seated = currentSeat(socket);
     sockets.delete(socket.id);
+    if (!seated) return;
     for (const room of markDisconnected(socket.id)) broadcast(room);
   });
 });

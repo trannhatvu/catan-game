@@ -149,19 +149,24 @@ export function joinRoom(code: unknown, name: unknown, socketId: string): { room
  * Reconnect by secret token. This is what makes a browser refresh survivable:
  * the seat, the hand and the turn order are all still on the server.
  */
-export function rejoinRoom(code: unknown, token: unknown, socketId: string): { room: Room; seat: Seat } | string {
+export function rejoinRoom(
+  code: unknown,
+  token: unknown,
+  socketId: string,
+): { room: Room; seat: Seat; previousSocketId: string | null } | string {
   const room = getRoom(code);
   if (!room) return 'No game with that code.';
   const seat = room.seats.find((s) => s.token === token);
   if (!seat) return 'That seat is not in this game.';
 
+  const previousSocketId = seat.socketId;
   seat.socketId = socketId;
   if (room.state) {
     const player = room.state.players.find((p) => p.id === seat.playerId);
     if (player) player.connected = true;
   }
   room.updatedAt = Date.now();
-  return { room, seat };
+  return { room, seat, previousSocketId };
 }
 
 export function startGame(room: Room, playerId: PlayerId): string | null {
@@ -197,6 +202,19 @@ export function act(room: Room, playerId: PlayerId, action: Action): string | nu
   return null;
 }
 
+function disconnectSeat(room: Room, seat: Seat): void {
+  if (seat.socketId === null) return;
+  seat.socketId = null;
+
+  if (room.state) {
+    const player = room.state.players.find((p) => p.id === seat.playerId);
+    if (player) player.connected = false;
+  } else if (room.hostId === seat.playerId) {
+    const online = room.seats.find((s) => s.socketId !== null);
+    if (online) room.hostId = online.playerId;
+  }
+}
+
 /**
  * A dropped connection keeps the seat, in the lobby as well as in a game, so a
  * refresh or a server restart puts everyone back where they were.
@@ -206,16 +224,7 @@ export function markDisconnected(socketId: string): Room[] {
   for (const room of rooms.values()) {
     const seat = room.seats.find((s) => s.socketId === socketId);
     if (!seat) continue;
-    seat.socketId = null;
-
-    if (room.state) {
-      const player = room.state.players.find((p) => p.id === seat.playerId);
-      if (player) player.connected = false;
-    } else if (room.hostId === seat.playerId) {
-      // Someone still here has to be able to deal.
-      const online = room.seats.find((s) => s.socketId !== null);
-      if (online) room.hostId = online.playerId;
-    }
+    disconnectSeat(room, seat);
     touched.push(room);
   }
   return touched;
@@ -226,7 +235,7 @@ export function markDisconnected(socketId: string): Room[] {
  * is kept, so the player can resume it later.
  */
 export function leaveRoom(room: Room, seat: Seat): void {
-  markDisconnected(seat.socketId ?? '');
+  disconnectSeat(room, seat);
   if (room.state) return;
   room.seats = room.seats.filter((s) => s !== seat);
   if (room.seats.length === 0) rooms.delete(room.code);
