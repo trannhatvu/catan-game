@@ -11,7 +11,7 @@ export function SoundControl({ preferences, error, onToggle, onVolumeChange }: S
   const { enabled, volume } = preferences;
 
   return (
-    <details className="sound-control">
+    <details className="sound-control" name="audio-settings">
       <summary className="mode-toggle sound-summary" aria-label={`Sound settings, sounds ${enabled ? 'on' : 'off'}`}>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M3 9v6h4l5 4V5L7 9H3" />

@@ -55,6 +55,11 @@ Kenney's CC0 [Casino Audio](https://kenney.nl/assets/casino-audio),
 [Interface Sounds](https://kenney.nl/assets/interface-sounds) packs; their
 license notices are in [`public/audio/kenney`](./public/audio/kenney).
 
+Optional background music has its own saved toggle and volume control. It
+changes with the menu, normal play, active trades, and late-game state, with a
+20–60 second pause between plays. Tracks are bundled locally; see
+[audio credits](./AUDIO_CREDITS.md).
+
 ## Share a game from Windows + WSL2
 
 For a temporary public link, run the single-process production server from the

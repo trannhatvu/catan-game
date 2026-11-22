@@ -106,6 +106,7 @@ describe('sound controls', () => {
         onVolumeChange={() => {}}
       />,
     );
+    expect(markup).toContain('name="audio-settings"');
     expect(markup).toContain('aria-label="Sound settings, sounds off"');
     expect(markup).toContain('Enable sounds');
     expect(markup).toContain('aria-label="Sound volume"');
