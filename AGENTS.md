@@ -52,8 +52,8 @@ client changes. There is no separate lint script in `package.json`.
   changes with deterministic states and relevant edge cases.
 - Preserve the per-tab `sessionStorage` reconnect session and the
   `localStorage` saved-seat behavior when changing connection flows. Room data
-  is persisted to `data/rooms.json` or `CATAN_DATA`; do not commit runtime data
-  or tokens.
+  is persisted to `data/rooms.json` or `CATAN_DATA`; only the seat's current
+  socket may act. Do not commit runtime data or tokens.
 - Keep 2D and 3D boards consistent with the same view and legal moves, including
   the 2D fallback and reduced-motion behavior. For visual or interaction
   changes, check both modes where applicable.

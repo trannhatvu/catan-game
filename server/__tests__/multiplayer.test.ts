@@ -5,7 +5,12 @@ import type { PlayerView } from '../../shared/redact';
 import type { Action, PlayerId } from '../../shared/types';
 
 type Sync = {
-  room: { code: string; hostId: PlayerId; started: boolean; players: { id: PlayerId; name: string }[] };
+  room: {
+    code: string;
+    hostId: PlayerId;
+    started: boolean;
+    players: { id: PlayerId; name: string; connected: boolean }[];
+  };
   view: PlayerView | null;
   you: { id: PlayerId; name: string };
 };
@@ -15,6 +20,7 @@ class Client {
   socket: Socket;
   sync: Sync | null = null;
   errors: string[] = [];
+  seatReplaced = false;
   code = '';
   token = '';
   id: PlayerId = '';
@@ -23,6 +29,7 @@ class Client {
     this.socket = connect(this.url, { transports: ['websocket'], forceNew: true });
     this.socket.on('sync', (payload: Sync) => (this.sync = payload));
     this.socket.on('error:message', (message: string) => this.errors.push(message));
+    this.socket.on('seat:replaced', () => (this.seatReplaced = true));
   }
 
   ready(): Promise<void> {
@@ -74,6 +81,15 @@ class Client {
       await new Promise((r) => setTimeout(r, 10));
     }
     throw new Error(`timed out waiting for ${label}; last errors: ${this.errors.join(' | ')}`);
+  }
+
+  async untilReplaced(timeoutMs = 4000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.seatReplaced && !this.socket.connected) return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error('timed out waiting for the old seat connection to close');
   }
 
   close() {
@@ -199,6 +215,59 @@ describe('two players over sockets', () => {
     await returning.until((s) => s.view !== null, 'the restored game');
     expect(returning.view.you!.resources).toEqual(handBefore);
     expect(returning.view.players.find((p) => p.id === seatBefore)!.connected).toBe(true);
+  });
+
+  it('replaces an active socket when its seat rejoins elsewhere', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([host.ready(), guest.ready()]);
+    await host.create('Ann');
+    await guest.join(host.code, 'Bob');
+    await host.until((s) => s.room.players.length === 2, 'the guest');
+    host.socket.emit('game:start');
+    await guest.until((s) => s.view !== null, 'the board');
+
+    const { code, token, id } = guest;
+    const returning = makeClient();
+    await returning.ready();
+    expect(await returning.rejoin(code, token)).toEqual({ ok: true });
+    await returning.until((s) => s.view !== null, 'the restored game');
+    await guest.untilReplaced();
+
+    expect(guest.seatReplaced).toBe(true);
+    expect(returning.id).toBe(id);
+    expect(returning.view.players.find((p) => p.id === id)!.connected).toBe(true);
+  });
+
+  it('releases a socket’s old seat when it enters another room', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([host.ready(), guest.ready()]);
+    await host.create('Ann');
+    const firstRoom = host.code;
+    await guest.join(firstRoom, 'Bob');
+    await host.until((s) => s.room.players.length === 2, 'the guest');
+
+    expect((await host.create('Ann again')).ok).toBe(true);
+    await guest.until((s) => s.room.players.length === 1, 'the host to leave');
+    expect(guest.sync!.room.hostId).toBe(guest.id);
+    expect(guest.sync!.room.players[0].name).toBe('Bob');
+  });
+
+  it('keeps the new seat connected when moving into an earlier room', async () => {
+    const firstHost = makeClient();
+    const firstGuest = makeClient();
+    const moving = makeClient();
+    await Promise.all([firstHost.ready(), firstGuest.ready(), moving.ready()]);
+    await firstHost.create('Ann');
+    const firstRoom = firstHost.code;
+    await firstGuest.join(firstRoom, 'Bob');
+    await firstHost.until((s) => s.room.players.length === 2, 'the first room guest');
+    await moving.create('Cid');
+
+    expect((await moving.join(firstRoom, 'Cid')).ok).toBe(true);
+    await moving.until((s) => s.room.code === firstRoom && s.room.players.length === 3, 'the new seat');
+    expect(moving.sync!.room.players.find((p) => p.id === moving.id)!.connected).toBe(true);
   });
 
   it('refuses a bad code and a full or started room', async () => {

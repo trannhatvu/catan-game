@@ -119,6 +119,15 @@ export function useGame(): GameApi {
       });
     });
 
+    socket.on('seat:replaced', () => {
+      saveSession(null);
+      setRoom(null);
+      setView(null);
+      setMe(null);
+      setError('This seat is now active in another connection.');
+      socket.disconnect();
+    });
+
     socket.on('disconnect', () => setConnected(false));
     socket.on('sync', (payload: Sync) => {
       setRoom(payload.room);

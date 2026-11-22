@@ -1,6 +1,6 @@
 # Project Improvement Plan
 
-**Status:** Proposed
+**Status:** In progress — delivery 1 complete
 **Prepared:** 2026-11-22
 
 This plan prioritizes improvements to the current Catan Online implementation.
@@ -10,7 +10,7 @@ automation initiative is intentionally excluded.
 
 ## Recommended order
 
-1. Fix reconnect ownership.
+1. Fix reconnect ownership (complete).
 2. Harden persistence.
 3. Prepare for public hosting.
 4. Improve accessibility and mobile usability.
@@ -25,6 +25,20 @@ configuration should wait until a provider is selected.
 
 **Relevant files:** `server/index.ts`, `server/rooms.ts`,
 `src/net/useGame.ts`.
+
+**Status:** Implemented on 2026-11-22.
+
+The server now verifies that a socket still owns its seat before accepting
+actions or room controls. Rejoining a connected seat invalidates and disconnects
+the previous socket; that client clears its tab session instead of attempting
+to reclaim the seat. Moving to another room releases the old seat, and leave
+handling disconnects that exact seat rather than another seat sharing a
+transitional socket ID.
+
+Regression coverage includes active-seat replacement and room switching, while
+existing refresh, room lifecycle and host-handover tests remain passing.
+Validation: 21 focused room/multiplayer tests passed, and `npm run build`
+passed. The build still reports its large 3D bundle warning.
 
 ### Implementation
 
@@ -216,14 +230,14 @@ screens.
 
 ## Delivery sequence
 
-| Delivery | Outcome |
-| --- | --- |
-| 1 | Exclusive socket ownership and reconnect fixes |
-| 2 | Safe loading, save failures and recovery |
-| 3 | Token, payload and production-runtime hardening |
-| 4 | Hosting configuration after selecting a provider |
-| 5 | Keyboard, screen-reader and mobile improvements |
-| 6 | Final documentation update |
+| Delivery | Outcome | Status |
+| --- | --- | --- |
+| 1 | Exclusive socket ownership and reconnect fixes | Complete |
+| 2 | Safe loading, save failures and recovery | Pending |
+| 3 | Token, payload and production-runtime hardening | Pending |
+| 4 | Hosting configuration after selecting a provider | Pending |
+| 5 | Keyboard, screen-reader and mobile improvements | Pending |
+| 6 | Final documentation update | Pending |
 
 Each delivery should include focused regression checks for the behavior changed.
 CI and a new end-to-end automation initiative are outside this plan.
