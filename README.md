@@ -6,8 +6,9 @@ that enforces every rule.
 
 ## Features
 
-- Complete base-game rules: setup draft, robber, trading, all development cards,
-  longest road, largest army, ten points to win
+- Rulebook-aligned setup and play: dice-based first-player selection with tie
+  rerolls, snake draft, robber, trades and counteroffers, development cards,
+  longest road, largest army and ten points to win
 - Real-time multiplayer over Socket.IO with four-letter room codes
 - 3D board (three.js / react-three-fiber) with a 2D SVG fallback, switchable in-game
 - Reconnect by token: refresh or drop and you keep your seat and hand
@@ -27,21 +28,61 @@ One player opens the page and picks **Start a new game**, then shares the
 four-letter code. Everyone else joins with it. Two to four players.
 
 ```bash
-npm test             # 68 tests: rules, board generation, rooms, sockets, rendering
+npm test             # run the complete test suite
 npm run simulate     # play a whole game bot-vs-bot and narrate it
 npm run build        # type-check + bundle the client
 npm start            # one process serving the built client and the sockets
 ```
 
-`npm run simulate -- <seed> <players>` replays the same game every time for a
-given seed. It is the quickest way to see whether a change to the rules broke
-something: it prints the play-by-play, the final scoreboard, and checks that no
-resource or development card was conjured up or lost along the way.
+`npm run simulate -- <seed> <players> [map]` replays the same game every time
+for the same arguments. It is the quickest way to see whether a change to the
+rules broke something: it prints the play-by-play, the final scoreboard, and
+checks that no resource or development card was conjured up or lost along the
+way.
 
 If [just](https://just.systems/) is installed, `just` lists shortcuts for these
 commands. For example, use `just dev`, `just test`, or
 `just test shared/__tests__/rules.test.ts`. `just deploy` builds and starts the
 production server locally; it does not deploy to a remote host.
+
+## Share a game from Windows + WSL2
+
+For a temporary public link, run the single-process production server from the
+WSL terminal:
+
+```bash
+just deploy
+```
+
+In VS Code's **Ports** view, keep port `3001` forwarded to `localhost:3001`.
+From Windows PowerShell, check that the WSL-forwarded server is reachable:
+
+```powershell
+(Invoke-WebRequest http://localhost:3001/api/rooms).StatusCode
+```
+
+The command should return `200`. Install Microsoft's Dev Tunnels CLI once from
+Windows PowerShell:
+
+```powershell
+winget install --id Microsoft.devtunnel --exact
+```
+
+Open a new PowerShell window after installation so the updated `PATH` is
+available. Sign in, then start a temporary anonymous tunnel for the game port:
+
+```powershell
+devtunnel user login
+devtunnel host -p 3001 --allow-anonymous
+```
+
+Share the HTTPS URL printed by `devtunnel host` and the four-letter room code
+with your friends. Keep `just deploy`, VS Code/WSL, and the tunnel command
+running while they play; press **Ctrl+C** in PowerShell to stop public access.
+This is temporary sharing, not remote hosting. Anonymous access means anyone
+with the URL can reach the game while the tunnel is running; the app has no
+player login, so share the link only with people you trust. See the [Dev
+Tunnels CLI reference](https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/cli-commands).
 
 ## How it is put together
 
@@ -95,15 +136,25 @@ directly. The distance rule is "no neighbouring vertex is occupied". Longest
 road is a depth-first walk that refuses to pass *through* a vertex holding an
 opponent's building, which is exactly how a road gets broken.
 
+### Setup and maps
+
+Players roll to determine who starts the setup draft; tied highest rollers
+reroll. **Classic** shuffles the terrain and places number tokens in the
+rulebook's A–R counterclockwise order, skipping the desert. **Fixed board**
+provides a repeatable layout but uses the normal snake draft rather than the
+rulebook's preset beginner placements. **Large island** is a 30-hex map
+variant; the app supports up to four players.
+
 ### What the rules cover
 
-Snake-draft setup with the second settlement paying out; rolling and production
-with the bank-shortage rule; the robber, discarding down to half above seven
-cards, and stealing; roads, settlements and cities with piece limits; all five
-development cards, one per turn and never on the turn it was bought; harbours at
-2:1 and 3:1; bank and player trading with offers and counter-responses; longest
-road and largest army including losing them; hidden victory point cards; ten
-points to win.
+Dice-based first-player selection with tie rerolls and a snake-draft setup with
+the second settlement paying out; rolling and production with the bank-shortage
+rule; the robber, discarding down to half above seven cards, and mandatory
+stealing when eligible; roads, settlements and cities with piece limits; all
+five development cards, one per turn and never on the turn it was bought;
+harbours at 2:1 and 3:1; bank and player trading with offers and counteroffers;
+longest road and largest army including losing them; hidden victory point
+cards; ten points to win.
 
 ### Reconnecting
 

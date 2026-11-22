@@ -4,6 +4,11 @@ State as of 18 September 2026. The game is playable end to end: two to four
 people open the page, one starts a game and shares a four-letter code, and they
 play a full match of base-game Catan in the browser.
 
+> Historical snapshot; it predates the rulebook-compliance work. For current
+> gameplay details and the compliance status, see [README.md](./README.md),
+> [CATAN_RULES_SPEC.md](./CATAN_RULES_SPEC.md), and
+> [CATAN_RULES_TODO.md](./CATAN_RULES_TODO.md).
+
 Everything below has been run, not just written. 59 tests pass, the production
 build is clean, and the whole flow has been driven through two real browser tabs.
 
