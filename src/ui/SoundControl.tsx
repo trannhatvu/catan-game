@@ -25,11 +25,23 @@ export function SoundControl({ preferences, error, onToggle, onVolumeChange }: S
         </svg>
       </summary>
       <div className="sound-popover" role="group" aria-label={t('soundSettings')}>
-        <button className="sound-enable" type="button" aria-pressed={enabled} onClick={onToggle}>
-          {enabled ? t('muteSounds') : t('enableSounds')}
+        <button
+          className="sound-enable"
+          type="button"
+          aria-label={enabled ? t('muteSounds') : t('enableSounds')}
+          aria-pressed={enabled}
+          onClick={onToggle}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3" />
+            {enabled ? <path d="M16 9a5 5 0 0 1 0 6" /> : <path d="m16 9 5 6m0-6-5 6" />}
+          </svg>
         </button>
         <label className="sound-volume">
-          <span>{t('soundVolume')}</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3" />
+            <path d="M16 9a5 5 0 0 1 0 6" />
+          </svg>
           <input
             type="range"
             min="0"
@@ -39,7 +51,6 @@ export function SoundControl({ preferences, error, onToggle, onVolumeChange }: S
             aria-label={t('soundVolume')}
             onChange={(event) => onVolumeChange(Number(event.currentTarget.value))}
           />
-          <output>{Math.round(volume * 100)}%</output>
         </label>
         {error && (
           <p className="sound-error" role="alert">

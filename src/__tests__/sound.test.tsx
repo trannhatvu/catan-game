@@ -108,8 +108,11 @@ describe('sound controls', () => {
     );
     expect(markup).toContain('name="audio-settings"');
     expect(markup).toContain('aria-label="Sound settings, sounds off"');
-    expect(markup).toContain('Enable sounds');
+    expect(markup).toContain('aria-label="Enable sounds"');
+    expect(markup).not.toContain('Enable sounds</button>');
     expect(markup).toContain('aria-label="Sound volume"');
+    expect(markup).not.toContain('50%</output>');
+    expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('value="0.5"');
   });
 });
