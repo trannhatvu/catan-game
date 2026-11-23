@@ -393,4 +393,57 @@ describe('two players over sockets', () => {
     expect(host.view.you?.resources).toMatchObject({ brick: 1, ore: 2 });
     expect(guest.view.you?.resources).toMatchObject({ brick: 1, ore: 0 });
   });
+
+  it('only returns room metadata to clients with a matching seat token', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    const outsider = makeClient();
+    await Promise.all([host.ready(), guest.ready(), outsider.ready()]);
+
+    await host.create('Ann');
+    await guest.join(host.code, 'Bob');
+    await outsider.create('Cid');
+
+    const listRooms = async (seats: Record<string, string>) =>
+      fetch(`${url}/api/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seats }),
+      });
+
+    const hostList = await listRooms({ [host.code]: host.token });
+    expect(hostList.status).toBe(200);
+    expect(await hostList.json()).toMatchObject({
+      count: 1,
+      rooms: [{ code: host.code }],
+    });
+
+    const guestList = await listRooms({ [host.code]: guest.token });
+    expect(await guestList.json()).toMatchObject({
+      count: 1,
+      rooms: [{ code: host.code }],
+    });
+
+    const invalidList = await listRooms({ [host.code]: outsider.token });
+    expect(await invalidList.json()).toMatchObject({ count: 0, rooms: [] });
+    expect((await fetch(`${url}/api/rooms`)).status).toBe(405);
+    expect((await listRooms({})).status).toBe(200);
+
+    const details = await fetch(`${url}/api/room/${host.code}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: guest.token }),
+    });
+    expect(details.status).toBe(200);
+    expect((await details.json()).players.map((player: { name: string }) => player.name)).toEqual(['Ann', 'Bob']);
+
+    const forbiddenDetails = await fetch(`${url}/api/room/${host.code}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: outsider.token }),
+    });
+    expect(forbiddenDetails.status).toBe(404);
+    expect((await fetch(`${url}/api/room/${host.code}`)).status).toBe(405);
+    expect((await fetch(`${url}/api/health`)).status).toBe(200);
+  });
 });
