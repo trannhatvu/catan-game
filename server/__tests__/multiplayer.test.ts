@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { io as connect, type Socket } from 'socket.io-client';
 import { start, stop } from '../index';
 import type { PlayerView } from '../../shared/redact';
-import { emptyResources, type Action, type PlayerId } from '../../shared/types';
-import { getRoom } from '../rooms';
+import { emptyResources, MAX_UNFINISHED_ROOMS_PER_USER, type Action, type PlayerId } from '../../shared/types';
+import { createRoom, getRoom, roomCount } from '../rooms';
 
 type Sync = {
   room: {
@@ -25,6 +25,7 @@ class Client {
   code = '';
   token = '';
   id: PlayerId = '';
+  seatTokens: Record<string, string> = {};
 
   constructor(private url: string) {
     this.socket = connect(this.url, { transports: ['websocket'], forceNew: true });
@@ -54,6 +55,7 @@ class Client {
             this.code = res.code;
             this.token = res.token;
             this.id = res.playerId;
+            this.seatTokens[res.code] = res.token;
           }
           resolve(res.ok ? { ok: true } : { ok: false, error: res.error });
         },
@@ -62,11 +64,11 @@ class Client {
   }
 
   create(name: string) {
-    return this.emitWithAck('room:create', { name });
+    return this.emitWithAck('room:create', { name, seats: this.seatTokens });
   }
 
   join(code: string, name: string) {
-    return this.emitWithAck('room:join', { code, name });
+    return this.emitWithAck('room:join', { code, name, seats: this.seatTokens });
   }
 
   rejoin(code: string, token: string) {
@@ -172,6 +174,25 @@ describe('two players over sockets', () => {
     host.send({ type: 'rollForStart' });
     await host.until(() => host.errors.length > errorsBefore, 'the post-abandon action rejection');
     expect(host.errors.at(-1)).toMatch(/game is over/i);
+  });
+
+  it('blocks create and join when the browser already has ten unfinished rooms', async () => {
+    const client = makeClient();
+    await client.ready();
+
+    for (let i = 0; i < MAX_UNFINISHED_ROOMS_PER_USER; i++) {
+      const { room, seat } = createRoom(`Player ${i}`, `offline-${i}`);
+      client.seatTokens[room.code] = seat.token;
+    }
+    const target = createRoom('Target', 'offline-target');
+    const countBefore = roomCount();
+    const limitError =
+      `You can have at most ${MAX_UNFINISHED_ROOMS_PER_USER} unfinished rooms. Finish one before creating or joining another.`;
+
+    expect(await client.create('Ann')).toEqual({ ok: false, error: limitError });
+    expect(await client.join(target.room.code, 'Ann')).toEqual({ ok: false, error: limitError });
+    expect(roomCount()).toBe(countBefore);
+    expect(target.room.seats).toHaveLength(1);
   });
 
   it('creates a room, joins it, plays the draft and keeps hands private', async () => {

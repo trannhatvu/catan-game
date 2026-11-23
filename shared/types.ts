@@ -47,6 +47,7 @@ export const VICTORY_POINTS_TO_WIN = 10;
 export const LONGEST_ROAD_MINIMUM = 5;
 export const LARGEST_ARMY_MINIMUM = 3;
 export const HAND_LIMIT_BEFORE_DISCARD = 7;
+export const MAX_UNFINISHED_ROOMS_PER_USER = 10;
 
 export type Building = { owner: PlayerId; type: 'settlement' | 'city' };
 export type Road = { owner: PlayerId };

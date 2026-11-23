@@ -54,7 +54,7 @@ describe('persistence failures over sockets', () => {
     const errors: string[] = [];
     guest.on('error:message', (message: string) => errors.push(message));
 
-    const created = await enter(host, 'room:create', { name: 'Ann' });
+    const created = await enter(host, 'room:create', { name: 'Ann', seats: {} });
     expect(created).toMatchObject({ ok: true, persisted: true });
     if (!created.ok) throw new Error(created.error);
     const previousSave = fs.readFileSync(dataFile, 'utf8');
@@ -63,7 +63,7 @@ describe('persistence failures over sockets', () => {
     const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
       throw new Error('simulated rename failure');
     });
-    const joined = await enter(guest, 'room:join', { code: created.code, name: 'Bob' });
+    const joined = await enter(guest, 'room:join', { code: created.code, name: 'Bob', seats: {} });
     rename.mockRestore();
 
     expect(joined).toMatchObject({ ok: true, persisted: false });
