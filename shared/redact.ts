@@ -26,6 +26,7 @@ export type PlayerView = {
   turn: number;
   current: number;
   currentPlayerId: PlayerId | null;
+  abandonedBy: PlayerId | null;
   initiative: GameState['initiative'];
   dice: [number, number] | null;
   mustRoll: boolean;
@@ -80,6 +81,7 @@ export function viewFor(state: GameState, viewerId: PlayerId | null): PlayerView
     turn: state.turn,
     current: state.current,
     currentPlayerId: state.players[state.current]?.id ?? null,
+    abandonedBy: state.abandonedBy,
     initiative: state.initiative,
     dice: state.dice,
     mustRoll: state.mustRoll,
@@ -114,6 +116,7 @@ export function viewFor(state: GameState, viewerId: PlayerId | null): PlayerView
 function emptyMoves(): LegalMoves {
   return {
     isMyTurn: false,
+    canAbandon: false,
     canRollForStart: false,
     canRoll: false,
     canEndTurn: false,

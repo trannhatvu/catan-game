@@ -293,7 +293,7 @@ describe('room persistence', () => {
     expect(restored.state!.players.every((player) => !player.connected)).toBe(true);
   });
 
-  it('migrates saved games from before initiative and counteroffers', () => {
+  it('migrates saved games from before initiative, counteroffers, and abandonment', () => {
     const { room, seats } = openRoom(['Ann', 'Bob']);
     expect(startGame(room, seats[0].playerId)).toBeNull();
     room.state!.phase = 'setup';
@@ -316,6 +316,7 @@ describe('room persistence', () => {
     const legacy = JSON.parse(JSON.stringify(room)) as Record<string, unknown>;
     const legacyState = legacy.state as Record<string, unknown>;
     delete legacyState.initiative;
+    delete legacyState.abandonedBy;
     delete (legacyState.setup as Record<string, unknown>).order;
     delete (legacyState.trade as Record<string, unknown>).counter;
     fs.writeFileSync(file(), JSON.stringify([legacy]));
@@ -323,6 +324,7 @@ describe('room persistence', () => {
     enablePersistence(file());
     const restored = getRoom(room.code)!;
     expect(restored.state?.initiative).toBeNull();
+    expect(restored.state?.abandonedBy).toBeNull();
     expect(restored.state?.setup?.order).toEqual(seats.map((seat) => seat.playerId));
     expect(restored.state?.trade?.counter).toBeNull();
   });

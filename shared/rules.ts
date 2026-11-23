@@ -247,6 +247,7 @@ function checkWinner(state: GameState): void {
   const vp = totalVictoryPoints(state, p.id);
   if (vp >= VICTORY_POINTS_TO_WIN) {
     state.winner = p.id;
+    state.abandonedBy = null;
     state.phase = 'finished';
     addLog(state, p.id, `wins the game with ${vp} victory points!`);
   }
@@ -301,6 +302,7 @@ export function createGame(
     longestRoad: { owner: null, length: 0 },
     largestArmy: { owner: null, size: 0 },
     winner: null,
+    abandonedBy: null,
     log: [],
     nextLogId: 1,
   };
@@ -453,10 +455,12 @@ export function applyAction(state: GameState, playerId: PlayerId, action: Action
   if (state.phase === 'finished') return fail('The game is over.');
   if (state.phase === 'lobby') return fail('The game has not started.');
 
-  // Discarding blocks the table, and responding to a trade is the only thing an
-  // off-turn player may ever do. Everything else is the current player's alone.
+  // Only discards, trade responses, and ending the game may bypass turn ownership.
   const offTurnAllowed =
-    action.type === 'discard' || action.type === 'respondTrade' || action.type === 'counterTrade';
+    action.type === 'abandonGame' ||
+    action.type === 'discard' ||
+    action.type === 'respondTrade' ||
+    action.type === 'counterTrade';
   if (!offTurnAllowed && currentPlayer(state).id !== playerId) return fail('It is not your turn.');
 
   const next = structuredClone(state);
@@ -468,6 +472,19 @@ export function applyAction(state: GameState, playerId: PlayerId, action: Action
 /** Returns a failure, or undefined when the mutation succeeded. */
 function reduce(state: GameState, me: Player, action: Action): ApplyResult | undefined {
   switch (action.type) {
+    case 'abandonGame':
+      state.phase = 'finished';
+      state.winner = null;
+      state.abandonedBy = me.id;
+      state.initiative = null;
+      state.setup = null;
+      state.pendingDiscards = {};
+      state.stealTargets = [];
+      state.freeRoads = 0;
+      state.mustRoll = false;
+      state.trade = null;
+      return;
+
     case 'rollForStart': {
       if (state.phase !== 'initiative' || !state.initiative) return fail('You cannot roll for the first player now.');
       if (!state.initiative.eligible.includes(me.id) || state.initiative.rolls[me.id] !== undefined) {
@@ -906,6 +923,7 @@ function playDevCard(state: GameState, me: Player, action: Action): ApplyResult 
 
 export type LegalMoves = {
   isMyTurn: boolean;
+  canAbandon: boolean;
   canRollForStart: boolean;
   canRoll: boolean;
   canEndTurn: boolean;
@@ -934,7 +952,8 @@ export type LegalMoves = {
 
 export function legalMoves(state: GameState, playerId: PlayerId): LegalMoves {
   const me = playerById(state, playerId);
-  const mine = me !== undefined && state.players[state.current]?.id === playerId;
+  const activeGame = state.phase !== 'finished' && state.phase !== 'lobby';
+  const mine = me !== undefined && activeGame && state.players[state.current]?.id === playerId;
   const counter = state.trade?.counter;
   const counterPlayer = counter ? playerById(state, counter.from) : undefined;
   const canCounterTrade =
@@ -948,6 +967,7 @@ export function legalMoves(state: GameState, playerId: PlayerId): LegalMoves {
   }
   const moves: LegalMoves = {
     isMyTurn: mine,
+    canAbandon: me !== undefined && activeGame,
     canRollForStart: mine && state.phase === 'initiative',
     canRoll: false,
     canEndTurn: false,

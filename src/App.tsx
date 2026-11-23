@@ -21,6 +21,8 @@ import {
   StealModal,
   TradeModal,
   TradeOfferModal,
+  AbandonedModal,
+  QuitGameModal,
   WinnerModal,
   useEscape,
 } from './ui/Modals';
@@ -45,6 +47,7 @@ function Game({
   const [pending, setPending] = useState<Pending>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [showCards, setShowCards] = useState(false);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const boardMode = useBoardMode();
   const sound = useSound();
   const roll = useRoll(view);
@@ -85,6 +88,10 @@ function Game({
     if (view.moves.mustAnswerCounter) setShowTrade(true);
   }, [view.moves.mustAnswerCounter]);
 
+  useEffect(() => {
+    if (view.phase === 'finished') setShowQuitConfirm(false);
+  }, [view.phase]);
+
   // Rejected actions surface as a short toast rather than a blocking dialog.
   useEffect(() => {
     if (!api.error) return;
@@ -96,6 +103,7 @@ function Game({
     setPending(null);
     setShowTrade(false);
     setShowCards(false);
+    setShowQuitConfirm(false);
   });
 
   const current = view.players.find((p) => p.id === view.currentPlayerId);
@@ -109,6 +117,16 @@ function Game({
         <button className="mode-toggle" onClick={api.leave} title={t('backToMainMenuHint')}>
           {t('menu')}
         </button>
+        {view.moves.canAbandon && (
+          <button
+            className="mode-toggle quit-game-button"
+            disabled={!api.connected}
+            onClick={() => setShowQuitConfirm(true)}
+            title={t('quitGameHint')}
+          >
+            {t('quitGame')}
+          </button>
+        )}
                 <span className="room-code">{api.room!.code}</span>
         {!api.connected && <span className="room-code">{t('reconnecting')}</span>}
         {boardMode.canToggle && (
@@ -129,9 +147,9 @@ function Game({
           onVolumeChange={music.setVolume}
         />
         <LanguageControl compact />
-        <div className="turn-banner" data-mine={view.moves.isMyTurn && !view.winner}>
+        <div className="turn-banner" data-mine={view.moves.isMyTurn && view.phase !== 'finished'}>
           <span className="turn-dot" style={{ ['--turn-color' as string]: current?.color ?? 'transparent' }} />
-          {view.winner
+          {view.phase === 'finished'
             ? t('gameOver')
             : view.phase === 'initiative'
               ? view.moves.isMyTurn
@@ -189,7 +207,14 @@ function Game({
       <TradeOfferModal view={view} send={api.send} />
       {showTrade && <TradeModal view={view} send={api.send} onClose={() => setShowTrade(false)} />}
       {showCards && <DevCardModal view={view} send={api.send} onClose={() => setShowCards(false)} />}
+      {showQuitConfirm && view.moves.canAbandon && (
+        <QuitGameModal
+          onCancel={() => setShowQuitConfirm(false)}
+          onConfirm={() => api.send({ type: 'abandonGame' })}
+        />
+      )}
       <WinnerModal view={view} onLeave={api.leave} />
+      <AbandonedModal view={view} onLeave={api.leave} />
 
       {api.error && (
         <div className="toast" role="status" onClick={api.dismissError}>

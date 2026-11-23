@@ -6,9 +6,9 @@ import { resourceName, useI18n, type Language, type TranslationKey } from '../i1
 import { emptyCounts, totalOf } from './HandBar';
 import { Confetti } from './Confetti';
 
-function Scrim({ children }: { children: React.ReactNode }) {
+function Scrim({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="scrim" role="dialog" aria-modal="true">
+    <div className={className ? `scrim ${className}` : 'scrim'} role="dialog" aria-modal="true">
       <div className="modal">{children}</div>
     </div>
   );
@@ -597,6 +597,39 @@ export function WinnerModal({ view, onLeave }: { view: PlayerView; onLeave: () =
         </Scrim>
       )}
     </>
+  );
+}
+
+export function QuitGameModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <Scrim className="quit-game-confirmation">
+      <h2>{t('quitGameConfirmTitle')}</h2>
+      <p className="modal-lede">{t('quitGameWarning')}</p>
+      <div className="modal-actions">
+        <button className="btn" onClick={onCancel}>{t('cancel')}</button>
+        <button className="btn btn-primary" onClick={onConfirm}>{t('confirmQuitGame')}</button>
+      </div>
+    </Scrim>
+  );
+}
+
+export function AbandonedModal({ view, onLeave }: { view: PlayerView; onLeave: () => void }) {
+  const { t } = useI18n();
+  if (view.phase !== 'finished' || view.winner !== null) return null;
+
+  const player = view.players.find((p) => p.id === view.abandonedBy);
+  return (
+    <Scrim>
+      <div className="winner">
+        <div className="wordmark">{t('gameAbandoned')}</div>
+        <p className="modal-lede">{t('gameAbandonedBy', { name: player?.name ?? t('playerFallback') })}</p>
+        <button className="btn btn-primary" style={{ width: '100%' }} onClick={onLeave}>
+          {t('backToStart')}
+        </button>
+      </div>
+    </Scrim>
   );
 }
 

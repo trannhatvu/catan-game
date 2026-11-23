@@ -155,11 +155,13 @@ export type GameState = {
   longestRoad: { owner: PlayerId | null; length: number };
   largestArmy: { owner: PlayerId | null; size: number };
   winner: PlayerId | null;
+  abandonedBy: PlayerId | null;
   log: LogEntry[];
   nextLogId: number;
 };
 
 export type Action =
+  | { type: 'abandonGame' }
   | { type: 'rollForStart' }
   | { type: 'placeSetupSettlement'; vertex: VertexId }
   | { type: 'placeSetupRoad'; edge: EdgeId }

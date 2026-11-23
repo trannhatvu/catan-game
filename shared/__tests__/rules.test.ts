@@ -52,6 +52,44 @@ function handSize(state: GameState, who: PlayerId): number {
   return RESOURCES.reduce((n, r) => n + p.resources[r], 0);
 }
 
+describe('game abandonment', () => {
+  it('lets an off-turn player end an active game and clears pending actions', () => {
+    const state = createGame(SEATS, 1);
+    state.phase = 'discarding';
+    state.initiative = null;
+    state.pendingDiscards = { A: 1, B: 1 };
+    state.stealTargets = ['C'];
+    state.freeRoads = 2;
+    state.mustRoll = true;
+    state.trade = {
+      from: 'A',
+      give: emptyResources(),
+      want: emptyResources(),
+      responses: { B: 'pending' },
+      counter: null,
+    };
+
+    expect(legalMoves(state, 'B').isMyTurn).toBe(false);
+    expect(legalMoves(state, 'B').canAbandon).toBe(true);
+
+    const abandoned = must(state, 'B', { type: 'abandonGame' });
+
+    expect(abandoned.phase).toBe('finished');
+    expect(abandoned.winner).toBeNull();
+    expect(abandoned.abandonedBy).toBe('B');
+    expect(abandoned.pendingDiscards).toEqual({});
+    expect(abandoned.stealTargets).toEqual([]);
+    expect(abandoned.freeRoads).toBe(0);
+    expect(abandoned.mustRoll).toBe(false);
+    expect(abandoned.trade).toBeNull();
+    expect(abandoned.board).toEqual(state.board);
+    expect(legalMoves(abandoned, 'B')).toMatchObject({ isMyTurn: false, canAbandon: false });
+    expectRejected(abandoned, 'A', { type: 'rollDice' });
+    expect(state.phase).toBe('discarding');
+    expect(state.abandonedBy).toBeNull();
+  });
+});
+
 function runInitiative(state: GameState): GameState {
   let s = state;
   let guard = 0;

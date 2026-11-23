@@ -137,6 +137,43 @@ afterAll(async () => {
 });
 
 describe('two players over sockets', () => {
+  it('lets any player abandon the match and broadcasts the terminal result', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([host.ready(), guest.ready()]);
+
+    expect((await host.create('Ann')).ok).toBe(true);
+    expect((await guest.join(host.code, 'Bob')).ok).toBe(true);
+
+    host.socket.emit('game:start');
+    await Promise.all([
+      host.until((sync) => sync.view !== null, 'the board to be dealt'),
+      guest.until((sync) => sync.view !== null, 'the board to be dealt'),
+    ]);
+
+    expect(guest.view.phase).toBe('initiative');
+    expect(guest.view.moves.isMyTurn).toBe(false);
+    expect(guest.view.moves.canAbandon).toBe(true);
+    guest.send({ type: 'abandonGame' });
+
+    await Promise.all([
+      host.until((sync) => sync.view?.phase === 'finished', 'the abandoned result'),
+      guest.until((sync) => sync.view?.phase === 'finished', 'the abandoned result'),
+    ]);
+
+    for (const client of [host, guest]) {
+      expect(client.view.winner).toBeNull();
+      expect(client.view.abandonedBy).toBe(guest.id);
+      expect(client.view.moves.canAbandon).toBe(false);
+    }
+
+    expect(getRoom(host.code)?.state?.abandonedBy).toBe(guest.id);
+    const errorsBefore = host.errors.length;
+    host.send({ type: 'rollForStart' });
+    await host.until(() => host.errors.length > errorsBefore, 'the post-abandon action rejection');
+    expect(host.errors.at(-1)).toMatch(/game is over/i);
+  });
+
   it('creates a room, joins it, plays the draft and keeps hands private', async () => {
     const host = makeClient();
     const guest = makeClient();
