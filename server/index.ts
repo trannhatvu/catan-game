@@ -7,7 +7,7 @@ import {
   act,
   createRoom,
   enablePersistence,
-  getRoom,
+  getRoomForSeatToken,
   joinRoom,
   leaveRoom,
   markDisconnected,
@@ -15,8 +15,7 @@ import {
   roomView,
   startGame,
   setMap,
-  roomCount,
-  roomsSnapshot,
+  roomsSnapshotForSeatTokens,
   saveRooms,
   sweepStaleRooms,
   viewForSeat,
@@ -31,6 +30,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const http = createServer(app);
 const io = new Server(http, { cors: { origin: true } });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSeatTokenMap(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((token) => typeof token === 'string' && token.length > 0);
+}
 
 /** Which seat each live socket is sitting in. */
 const sockets = new Map<string, { room: Room; seat: Seat }>();
@@ -164,15 +171,36 @@ io.on('connection', (socket) => {
   });
 });
 
-// Every game lives in one in-memory Map keyed by room code; this reports what
-// is currently in it. No player names or seat tokens, so it is safe to expose.
-app.get('/api/rooms', (_req, res) => {
-  res.json({ count: roomCount(), rooms: roomsSnapshot() });
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true });
 });
 
-app.get('/api/room/:code', (req, res) => {
-  const room = getRoom(req.params.code);
-  res.json(room ? roomView(room) : { error: 'not found' });
+app.get('/api/rooms', (_req, res) => {
+  res.status(405).set('Allow', 'POST').json({ error: 'Seat tokens are required.' });
+});
+
+app.post('/api/rooms', express.json(), (req, res) => {
+  const body: unknown = req.body;
+  const seats = isRecord(body) ? body.seats : undefined;
+  if (!isSeatTokenMap(seats)) {
+    return res.status(400).json({ error: 'A saved seat-token map is required.' });
+  }
+  const rooms = roomsSnapshotForSeatTokens(seats);
+  res.json({ count: rooms.length, rooms });
+});
+
+app.get('/api/room/:code', (_req, res) => {
+  res.status(405).set('Allow', 'POST').json({ error: 'A seat token is required.' });
+});
+
+app.post('/api/room/:code', express.json(), (req, res) => {
+  const body: unknown = req.body;
+  if (!isRecord(body) || typeof body.token !== 'string' || body.token.length === 0) {
+    return res.status(400).json({ error: 'A seat token is required.' });
+  }
+  const room = getRoomForSeatToken(req.params.code, body.token);
+  if (!room) return res.status(404).json({ error: 'not found' });
+  res.json(roomView(room));
 });
 
 // In production the built client is served from the same process, so there is

@@ -14,7 +14,11 @@ function useLobbies(): RoomSummary[] {
   useEffect(() => {
     let live = true;
     const load = () =>
-      fetch('/api/rooms')
+      fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seats: savedSeats() }),
+      })
         .then((r) => r.json())
         .then((body: { rooms: RoomSummary[] }) => live && setRooms(body.rooms))
         .catch(() => {});
@@ -28,6 +32,13 @@ function useLobbies(): RoomSummary[] {
   return rooms;
 }
 
+export function roomsForSavedSeats(
+  rooms: RoomSummary[],
+  seats: Readonly<Record<string, string>>,
+): RoomSummary[] {
+  return rooms.filter((room) => Object.prototype.hasOwnProperty.call(seats, room.code));
+}
+
 export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicControls }) {
   const { language, t } = useI18n();
   const [name, setName] = useState('');
@@ -35,8 +46,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const mine = savedSeats();
-  // Rooms nobody is sitting in stay hidden, unless this browser holds a seat there.
-  const lobbies = useLobbies().filter((r) => r.code in mine || (r.connected > 0 && !r.finished));
+  const lobbies = roomsForSavedSeats(useLobbies(), mine);
 
   async function run(fn: () => Promise<string | null>) {
     setBusy(true);
@@ -107,32 +117,19 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
           <>
             <div className="divider">{t('lobbies')}</div>
             <ul className="seat-list">
-              {lobbies.map((r) => {
-                const open = !r.started && (r.players < MAX_PLAYERS || r.connected < r.players);
-                return (
-                  <li key={r.code} className="seat">
-                    <span className="seat-name">
-                      <span className="room-code">{r.code}</span> {localizedMapName(language, r.map)}
-                    </span>
-                    <span className="seat-tag">
-                      {r.finished ? t('finished') : r.started ? t('playing') : t('connectedPlayers', { connected: r.connected, max: MAX_PLAYERS })}
-                    </span>
-                    {r.code in mine ? (
-                      <button className="btn" disabled={busy || !api.connected} onClick={() => void run(() => api.resume(r.code))}>
-                        {t('resume')}
-                      </button>
-                    ) : (
-                      <button
-                        className="btn"
-                        disabled={busy || !api.connected || !open}
-                        onClick={() => void run(() => api.joinRoom(r.code, name))}
-                      >
-                        {t('join')}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
+              {lobbies.map((r) => (
+                <li key={r.code} className="seat">
+                  <span className="seat-name">
+                    <span className="room-code">{r.code}</span> {localizedMapName(language, r.map)}
+                  </span>
+                  <span className="seat-tag">
+                    {r.finished ? t('finished') : r.started ? t('playing') : t('connectedPlayers', { connected: r.connected, max: MAX_PLAYERS })}
+                  </span>
+                  <button className="btn" disabled={busy || !api.connected} onClick={() => void run(() => api.resume(r.code))}>
+                    {t('resume')}
+                  </button>
+                </li>
+              ))}
             </ul>
           </>
         )}

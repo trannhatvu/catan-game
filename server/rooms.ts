@@ -482,6 +482,11 @@ export function getRoom(code: unknown): Room | undefined {
   return typeof code === 'string' ? rooms.get(code.trim().toUpperCase()) : undefined;
 }
 
+export function getRoomForSeatToken(code: unknown, token: unknown): Room | undefined {
+  const room = getRoom(code);
+  return room?.seats.some((seat) => seat.token === token) ? room : undefined;
+}
+
 export function createRoom(name: unknown, socketId: string): { room: Room; seat: Seat } {
   const seat: Seat = { playerId: 'p1', token: newToken(), name: cleanName(name), socketId };
   const room: Room = { code: newCode(), hostId: seat.playerId, seats: [seat], map: 'classic', state: null, updatedAt: Date.now() };
@@ -633,7 +638,7 @@ export function roomCount(): number {
   return rooms.size;
 }
 
-/** A read-only snapshot of the in-memory store, for the status endpoint. */
+/** A read-only summary of one room, without player names or seat tokens. */
 export type RoomSummary = {
   code: string;
   map: MapId;
@@ -644,8 +649,8 @@ export type RoomSummary = {
   ageMs: number;
 };
 
-export function roomsSnapshot(): RoomSummary[] {
-  return [...rooms.values()].map((room) => ({
+function summarizeRoom(room: Room): RoomSummary {
+  return {
     code: room.code,
     map: room.map,
     players: room.seats.length,
@@ -653,7 +658,23 @@ export function roomsSnapshot(): RoomSummary[] {
     started: room.state !== null,
     finished: room.state?.phase === 'finished',
     ageMs: Date.now() - room.updatedAt,
-  }));
+  };
+}
+
+export function roomsSnapshot(): RoomSummary[] {
+  return [...rooms.values()].map(summarizeRoom);
+}
+
+export function roomsSnapshotForSeatTokens(
+  seatTokens: Readonly<Record<string, string>>,
+): RoomSummary[] {
+  return [...rooms.values()]
+    .filter((room) => {
+      if (!Object.prototype.hasOwnProperty.call(seatTokens, room.code)) return false;
+      const token = seatTokens[room.code];
+      return room.seats.some((seat) => seat.token === token);
+    })
+    .map(summarizeRoom);
 }
 
 /** Test seam: drop every room so one test file cannot leak into the next. */

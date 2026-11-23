@@ -155,7 +155,7 @@ give friends a temporary public HTTPS link to a game running on your machine.
    PowerShell, check that it is reachable — this should print `200`:
 
    ```powershell
-   (Invoke-WebRequest http://localhost:3001/api/rooms).StatusCode
+   (Invoke-WebRequest http://localhost:3001/api/health).StatusCode
    ```
 
 3. Install the Dev Tunnels CLI once, then open a new PowerShell window so the
@@ -273,8 +273,11 @@ The full audit against the rulebook is in the
 ### Rooms and reconnection
 
 Every game lives in one `Map<code, Room>` in `server/rooms.ts`, mirrored to
-disk. The entrance lists open lobbies from `GET /api/rooms` — codes, map and
-player counts, but no names or seat tokens.
+disk. The entrance displays only rooms for which this browser has a saved seat
+token (rooms it created or joined). Enter a room code to join a different room.
+`POST /api/rooms` requires saved seat tokens and returns summaries only for
+matching rooms. `POST /api/room/:code` likewise requires a valid seat token.
+`GET /api/health` is available for server checks without exposing room data.
 
 Each seat gets a secret token kept in `sessionStorage`, so refreshing puts a
 player back in their seat with their hand intact. It is per tab on purpose: a
