@@ -680,6 +680,10 @@ export function roomsSnapshotForSeatTokens(
     .map(summarizeRoom);
 }
 
+export function unfinishedRoomCountForSeatTokens(seatTokens: Readonly<Record<string, string>>): number {
+  return roomsSnapshotForSeatTokens(seatTokens).filter((room) => !room.finished).length;
+}
+
 /** Test seam: drop every room so one test file cannot leak into the next. */
 export function resetRooms(): void {
   rooms.clear();

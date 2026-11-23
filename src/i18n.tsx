@@ -225,6 +225,7 @@ const en = {
   errorNoGame: 'No game with that code.',
   errorStarted: 'That game has already started.',
   errorFull: 'That game is full.',
+  roomLimitReached: 'You can have at most {max} unfinished rooms. Finish one before creating or joining another.',
   errorSeatMissing: 'That seat is not in this game.',
   errorHostStart: 'Only the host can start the game.',
   errorNeedPlayers: 'You need at least {count} players.',
@@ -459,6 +460,7 @@ const vi: Record<TranslationKey, string> = {
   errorNoGame: 'Không tìm thấy ván chơi với mã này.',
   errorStarted: 'Ván chơi này đã bắt đầu.',
   errorFull: 'Ván chơi đã đủ người.',
+  roomLimitReached: 'Bạn chỉ có thể có tối đa {max} phòng chưa kết thúc. Hãy kết thúc một phòng trước khi tạo hoặc tham gia phòng khác.',
   errorSeatMissing: 'Chỗ ngồi này không thuộc ván chơi.',
   errorHostStart: 'Chỉ chủ phòng mới có thể bắt đầu ván.',
   errorNeedPlayers: 'Cần ít nhất {count} người chơi.',
@@ -725,6 +727,10 @@ export function translateServerMessage(message: string, language: Language): str
   if (language === 'en') return message;
   const key = serverErrors[message];
   if (key) return translate(language, key);
+  const roomLimitMatch = message.match(
+    /^You can have at most (\d+) unfinished rooms\. Finish one before creating or joining another\.$/,
+  );
+  if (roomLimitMatch) return translate(language, 'roomLimitReached', { max: roomLimitMatch[1]! });
   const ruleError = ruleErrors[message];
   if (ruleError) return ruleError;
   const match = message.match(/^You need at least (\d+) players\.$/);

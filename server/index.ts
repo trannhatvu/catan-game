@@ -16,13 +16,14 @@ import {
   startGame,
   setMap,
   roomsSnapshotForSeatTokens,
+  unfinishedRoomCountForSeatTokens,
   saveRooms,
   sweepStaleRooms,
   viewForSeat,
   type Room,
   type Seat,
 } from './rooms';
-import type { Action } from '../shared/types';
+import { MAX_UNFINISHED_ROOMS_PER_USER, type Action } from '../shared/types';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isSeatTokenMap(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((token) => typeof token === 'string' && token.length > 0);
+}
+
+function roomLimitError(seatTokens: Record<string, string>): string | null {
+  if (unfinishedRoomCountForSeatTokens(seatTokens) < MAX_UNFINISHED_ROOMS_PER_USER) return null;
+  return `You can have at most ${MAX_UNFINISHED_ROOMS_PER_USER} unfinished rooms. Finish one before creating or joining another.`;
 }
 
 /** Which seat each live socket is sitting in. */
@@ -108,13 +114,23 @@ function seatSocket(socket: Socket, room: Room, seat: Seat, ack?: Ack): void {
 }
 
 io.on('connection', (socket) => {
-  socket.on('room:create', ({ name }: { name?: string } = {}, ack?: Ack) => {
-    const { room, seat } = createRoom(name, socket.id);
+  socket.on('room:create', (payload: unknown = {}, ack?: Ack) => {
+    if (!isRecord(payload) || !isSeatTokenMap(payload.seats)) {
+      return ack?.({ ok: false, error: 'A saved seat-token map is required.' });
+    }
+    const limitError = roomLimitError(payload.seats);
+    if (limitError) return ack?.({ ok: false, error: limitError });
+    const { room, seat } = createRoom(payload.name, socket.id);
     seatSocket(socket, room, seat, ack);
   });
 
-  socket.on('room:join', ({ code, name }: { code?: string; name?: string } = {}, ack?: Ack) => {
-    const result = joinRoom(code, name, socket.id);
+  socket.on('room:join', (payload: unknown = {}, ack?: Ack) => {
+    if (!isRecord(payload) || !isSeatTokenMap(payload.seats)) {
+      return ack?.({ ok: false, error: 'A saved seat-token map is required.' });
+    }
+    const limitError = roomLimitError(payload.seats);
+    if (limitError) return ack?.({ ok: false, error: limitError });
+    const result = joinRoom(payload.code, payload.name, socket.id);
     if (typeof result === 'string') return ack?.({ ok: false, error: result });
     seatSocket(socket, result.room, result.seat, ack);
   });

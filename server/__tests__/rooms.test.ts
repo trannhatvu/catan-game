@@ -19,6 +19,7 @@ import {
   setMap,
   startGame,
   sweepStaleRooms,
+  unfinishedRoomCountForSeatTokens,
   type Room,
   type Seat,
 } from '../rooms';
@@ -132,6 +133,25 @@ describe('the in-memory room store', () => {
 
     startGame(room, room.seats[0].playerId);
     expect(joinRoom(room.code, 'E', nextSocket())).toBe('That game has already started.');
+  });
+
+  it('counts only unfinished rooms with matching saved seat tokens', () => {
+    const lobby = createRoom('Ann', nextSocket());
+    const active = openRoom(['Bob', 'Cid']);
+    const finished = openRoom(['Dee', 'Eve']);
+    const foreign = createRoom('Fox', nextSocket());
+    expect(startGame(active.room, active.seats[0].playerId)).toBeNull();
+    expect(startGame(finished.room, finished.seats[0].playerId)).toBeNull();
+    expect(act(finished.room, finished.seats[1].playerId, { type: 'abandonGame' })).toBeNull();
+
+    const seats = {
+      [lobby.room.code]: lobby.seat.token,
+      [active.room.code]: active.seats[1].token,
+      [finished.room.code]: finished.seats[0].token,
+      [foreign.room.code]: 'not-a-seat-token',
+    };
+
+    expect(unfinishedRoomCountForSeatTokens(seats)).toBe(2);
   });
 
   it('frees a seat when someone leaves the lobby, and hands the host on', () => {

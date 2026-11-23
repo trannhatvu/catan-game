@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { savedSeats, type GameApi } from '../net/useGame';
 import type { RoomSummary } from '../../server/rooms';
+import { MAX_UNFINISHED_ROOMS_PER_USER } from '../../shared/types';
 import type { BackgroundMusicControls } from '../audio/useMusic';
 import { MusicControl } from './MusicControl';
 import { LanguageControl } from './LanguageControl';
@@ -39,6 +40,10 @@ export function roomsForSavedSeats(
   return rooms.filter((room) => Object.prototype.hasOwnProperty.call(seats, room.code));
 }
 
+export function hasReachedUnfinishedRoomLimit(rooms: readonly RoomSummary[]): boolean {
+  return rooms.filter((room) => !room.finished).length >= MAX_UNFINISHED_ROOMS_PER_USER;
+}
+
 export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicControls }) {
   const { language, t } = useI18n();
   const [name, setName] = useState('');
@@ -47,6 +52,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
   const [busy, setBusy] = useState(false);
   const mine = savedSeats();
   const lobbies = roomsForSavedSeats(useLobbies(), mine);
+  const atRoomLimit = hasReachedUnfinishedRoomLimit(lobbies);
 
   async function run(fn: () => Promise<string | null>) {
     setBusy(true);
@@ -56,11 +62,13 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
 
   function host(e: FormEvent) {
     e.preventDefault();
+    if (atRoomLimit) return;
     void run(() => api.createRoom(name));
   }
 
   function join(e: FormEvent) {
     e.preventDefault();
+    if (atRoomLimit) return;
     if (code.trim().length < 4) {
       setProblem('Enter the four-letter code from your host.');
       return;
@@ -75,6 +83,11 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
           Cat<span>a</span>n
         </div>
         <p className="entrance-lede">{t('entranceLede')}</p>
+        {atRoomLimit && (
+          <div className="notice" role="status">
+            {t('roomLimitReached', { max: MAX_UNFINISHED_ROOMS_PER_USER })}
+          </div>
+        )}
 
         <form onSubmit={host}>
           <label className="field">
@@ -88,7 +101,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
             />
           </label>
 
-          <button className="btn btn-primary" type="submit" disabled={busy || !api.connected} style={{ width: '100%' }}>
+          <button className="btn btn-primary" type="submit" disabled={busy || !api.connected || atRoomLimit} style={{ width: '100%' }}>
             {t('startNewGame')}
           </button>
         </form>
@@ -108,7 +121,7 @@ export function Entrance({ api, music }: { api: GameApi; music: BackgroundMusicC
               spellCheck={false}
             />
           </label>
-          <button className="btn" type="submit" disabled={busy || !api.connected} style={{ width: '100%' }}>
+          <button className="btn" type="submit" disabled={busy || !api.connected || atRoomLimit} style={{ width: '100%' }}>
             {t('joinGame')}
           </button>
         </form>

@@ -171,8 +171,8 @@ export function useGame(): GameApi {
     me,
     error,
     dismissError: useCallback(() => setError(null), []),
-    createRoom: useCallback((name: string) => enter('room:create', { name }), [enter]),
-    joinRoom: useCallback((code: string, name: string) => enter('room:join', { code, name }), [enter]),
+    createRoom: useCallback((name: string) => enter('room:create', { name, seats: savedSeats() }), [enter]),
+    joinRoom: useCallback((code: string, name: string) => enter('room:join', { code, name, seats: savedSeats() }), [enter]),
     resume: useCallback(
       async (code: string) => {
         const error = await enter('room:rejoin', { code, token: savedSeats()[code] });

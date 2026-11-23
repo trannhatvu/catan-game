@@ -278,6 +278,9 @@ token (rooms it created or joined). Enter a room code to join a different room.
 `POST /api/rooms` requires saved seat tokens and returns summaries only for
 matching rooms. `POST /api/room/:code` likewise requires a valid seat token.
 `GET /api/health` is available for server checks without exposing room data.
+Each browser may hold seats in up to 10 unfinished rooms, including lobbies;
+finished rooms do not count. The server checks saved seat tokens before
+allowing that browser to create or join another room.
 
 Each seat gets a secret token kept in `sessionStorage`, so refreshing puts a
 player back in their seat with their hand intact. It is per tab on purpose: a
