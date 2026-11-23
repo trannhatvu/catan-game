@@ -142,8 +142,12 @@ describe('music controls', () => {
     );
     expect(markup).toContain('name="audio-settings"');
     expect(markup).toContain('aria-label="Background music settings, music off"');
-    expect(markup).toContain('Play music');
     expect(markup).toContain('aria-label="Background music volume"');
+    const volumeRow = markup.match(/<div class="sound-volume music-volume">([\s\S]*?)<\/div>/)?.[1];
+    expect(volumeRow).toBeDefined();
+    expect(volumeRow).toContain('aria-label="Play music"');
+    expect(markup).not.toContain('50%</output>');
+    expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('value="0.5"');
   });
 });

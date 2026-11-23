@@ -26,11 +26,22 @@ export function MusicControl({ preferences, error, onToggle, onVolumeChange }: M
         </svg>
       </summary>
       <div className="sound-popover" role="group" aria-label={t('musicSettings')}>
-        <button className="sound-enable" type="button" aria-pressed={enabled} onClick={onToggle}>
-          {enabled ? t('pauseMusic') : t('playMusic')}
-        </button>
-        <label className="sound-volume">
-          <span>{t('musicVolume')}</span>
+        <div className="sound-volume music-volume">
+          <button
+            className="sound-enable music-toggle"
+            type="button"
+            aria-label={enabled ? t('pauseMusic') : t('playMusic')}
+            aria-pressed={enabled}
+            onClick={onToggle}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {enabled ? (
+                <path d="M7 5h4v14H7zM15 5h4v14h-4z" fill="currentColor" stroke="none" />
+              ) : (
+                <path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none" />
+              )}
+            </svg>
+          </button>
           <input
             type="range"
             min="0"
@@ -40,8 +51,7 @@ export function MusicControl({ preferences, error, onToggle, onVolumeChange }: M
             aria-label={t('musicVolume')}
             onChange={(event) => onVolumeChange(Number(event.currentTarget.value))}
           />
-          <output>{Math.round(volume * 100)}%</output>
-        </label>
+        </div>
         {error && (
           <p className="sound-error" role="alert">
             {error}
