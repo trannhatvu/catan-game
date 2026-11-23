@@ -303,6 +303,8 @@ function isGameState(value: unknown): value is GameState {
       (typeof value.largestArmy.owner === 'string' && playerIds.has(value.largestArmy.owner))) &&
     isNonNegativeInteger(value.largestArmy.size) &&
     (value.winner === null || (typeof value.winner === 'string' && playerIds.has(value.winner))) &&
+    (value.abandonedBy === null ||
+      (typeof value.abandonedBy === 'string' && playerIds.has(value.abandonedBy))) &&
     Array.isArray(value.log) &&
     value.log.every((entry) => isLogEntry(entry, playerIds)) &&
     isNonNegativeInteger(value.nextLogId)
@@ -315,6 +317,7 @@ function migrateRoomData(value: unknown): unknown {
     if (!isRecord(candidate) || !isRecord(candidate.state)) continue;
     const state = candidate.state;
     if (!('initiative' in state)) state.initiative = null;
+    if (!('abandonedBy' in state)) state.abandonedBy = null;
     if (
       state.phase === 'setup' &&
       isRecord(state.setup) &&

@@ -135,7 +135,7 @@ function BuildButton({
 
 /** One line telling the player exactly what the game is waiting on. */
 function prompt(view: PlayerView, owed: number, t: Translator): string | null {
-  if (view.winner) return null;
+  if (view.phase === 'finished') return null;
   if (owed > 0) return t('discardCards', { count: owed });
   if (view.moves.mustAnswerCounter) return t('answerCounteroffer');
   if (view.trade?.counter?.from === view.you?.id) return t('waitingCounterofferResponse');
